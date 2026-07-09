@@ -146,6 +146,7 @@ async def correr_caso(client: httpx.AsyncClient, base_url: str, caso: dict, tele
     await limpiar_historial(telefono)
 
     for turno in caso["turnos"]:
+        await asyncio.sleep(4)  # ponytail: evita saturar la cuota gratuita de Gemini (15 req/min)
         estado = await enviar_webhook(client, base_url, telefono, turno["usuario"])
         if estado.get("status") != "ok":
             errores.append(f"webhook devolvió status={estado.get('status')} en vez de 'ok'")

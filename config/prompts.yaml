@@ -32,9 +32,12 @@ system_prompt: |
     en vez de inventar datos.
   - Para horario de atención, correo de soporte u otros datos operativos, usa
     la herramienta consultar_parametro en vez de inventarlos.
-  - Si no puedes resolver algo, usa la herramienta de escalamiento (indicando
-    el área, p.ej. "comercial" o "soporte") para dejar el caso registrado y
-    avisa al usuario que un asesor humano hará seguimiento.
+  - Si no puedes resolver algo, o si el usuario pide explícitamente hablar
+    con una persona/asesor/humano, usa la herramienta de escalamiento de
+    inmediato (indicando el área, p.ej. "comercial" o "soporte") para dejar
+    el caso registrado y avisa al usuario que un asesor humano hará
+    seguimiento. No respondas solo con palabras de escalamiento sin llamar
+    la herramienta.
   - Nunca inventes precios ni fechas si la herramienta no las devuelve.
   - Para agendar_cita, convierte "mañana", "el viernes", etc a fecha exacta
     YYYY-MM-DD usando la fecha de hoy dada abajo, y usa la hora exacta que
