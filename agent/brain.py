@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import os
 import random
@@ -5,7 +6,7 @@ from datetime import datetime
 
 import yaml
 from google import genai
-from google.genai import types
+from google.genai import errors, types
 
 from . import tools
 
@@ -56,20 +57,42 @@ def _historial_a_contenido(historial: list[dict]) -> list[types.Content]:
     ]
 
 
-async def generar_respuesta(telefono: str, texto_usuario: str, historial: list[dict]) -> str:
+def _retry_delay_segundos(exc: errors.ClientError, default: float = 5.0) -> float:
+    # ponytail: parseo best-effort del retryDelay que manda la API ("31s"); si no viene, default fijo.
     try:
-        chat = client.chats.create(
-            model=MODEL_NAME,
-            history=_historial_a_contenido(historial),
-            config=types.GenerateContentConfig(
-                system_instruction=SYSTEM_PROMPT + f"\n\nFecha de hoy: {datetime.now().strftime('%Y-%m-%d')}.",
-                tools=TOOL_FUNCTIONS,
-            ),
-        )
-        respuesta = chat.send_message(texto_usuario)
-        texto = respuesta.text
+        for detail in exc.details.get("error", {}).get("details", []):
+            if detail.get("@type", "").endswith("RetryInfo"):
+                return float(detail.get("retryDelay", f"{default}s").rstrip("s"))
     except Exception:
-        logger.exception("Fallo generando respuesta para %s", telefono)
-        texto = None
+        pass
+    return default
+
+
+async def generar_respuesta(telefono: str, texto_usuario: str, historial: list[dict]) -> str:
+    texto = None
+    for intento in range(2):
+        try:
+            chat = client.chats.create(
+                model=MODEL_NAME,
+                history=_historial_a_contenido(historial),
+                config=types.GenerateContentConfig(
+                    system_instruction=SYSTEM_PROMPT + f"\n\nFecha de hoy: {datetime.now().strftime('%Y-%m-%d')}.",
+                    tools=TOOL_FUNCTIONS,
+                ),
+            )
+            respuesta = chat.send_message(texto_usuario)
+            texto = respuesta.text
+            break
+        except errors.ClientError as e:
+            if e.code == 429 and intento == 0:
+                espera = _retry_delay_segundos(e)
+                logger.warning("429 de Gemini para %s, reintentando en %.1fs", telefono, espera)
+                await asyncio.sleep(espera)
+                continue
+            logger.exception("Fallo generando respuesta para %s", telefono)
+            break
+        except Exception:
+            logger.exception("Fallo generando respuesta para %s", telefono)
+            break
 
     return texto if texto else random.choice(RESPUESTAS_FALLBACK)

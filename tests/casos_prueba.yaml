@@ -111,7 +111,7 @@
   descripcion: Preguntar por un ticket con ID inventado.
   turnos:
     - usuario: "¿Cómo va el ticket TCK-0000?"
-      espera_keywords: ["no encontr|no existe|no tenemos registro"]
+      espera_keywords: ["no (he )?(podido )?encontr|no existe|no tenemos registro"]
 
 - id: 16_escalar_a_humano
   categoria: escalamiento
