@@ -1,0 +1,23 @@
+negocio:
+  nombre: "SysPlus"
+  tipo: "Empresa de software - ERP"
+  descripcion: >
+    SysPlus desarrolla y mantiene un software ERP con 12 módulos:
+    Productos, Inventario, Facturación, Cartera, Compras, Cuentas por pagar,
+    Tesorería, Importaciones, CRM, Producción, Nómina, Contabilidad, POS.
+  agente:
+    nombre: "SysBot"
+  audiencia:
+    - clientes_finales
+    - revendedores
+  casos_de_uso:
+    - comercial
+    - soporte
+  horario:
+    atencion: "24/7 vía SysBot"
+    fuera_horario_humano: >
+      SysBot sigue atendiendo lo que pueda. Si no puede resolver el caso,
+      lo registra para escalamiento y seguimiento por correo.
+  escalamiento:
+    canal: "correo"
+    destinatario: "kevin.f.orduz@gmail.com"
