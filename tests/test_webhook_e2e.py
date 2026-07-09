@@ -1,0 +1,222 @@
+"""Casos de prueba E2E disparando el webhook REAL de Meta contra el servidor
+local (o el túnel cloudflared), con firma HMAC válida, tal como llegaría de
+WhatsApp. El envío saliente NO se mockea: si META_ACCESS_TOKEN es válido, la
+respuesta del bot sale de verdad por WhatsApp real.
+
+Requiere:
+- Servidor corriendo (docker-compose up, o `uvicorn agent.main:app`) en BASE_URL.
+- .env con META_APP_SECRET (para firmar) y META_ACCESS_TOKEN válido (para el envío real).
+
+Uso:
+    python -m tests.test_webhook_e2e
+    python -m tests.test_webhook_e2e 08_registrar_lead
+    python -m tests.test_webhook_e2e --categoria crm
+    python -m tests.test_webhook_e2e --telefono-real 573001112233   # ves los mensajes llegar a tu WhatsApp
+    python -m tests.test_webhook_e2e --base-url https://tu-tunel.trycloudflare.com
+"""
+
+import argparse
+import asyncio
+import hashlib
+import hmac
+import json
+import os
+import re
+import sys
+import time
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
+
+import httpx
+import yaml
+from dotenv import load_dotenv
+
+load_dotenv()
+
+from agent import tools  # noqa: E402
+from agent.db import Cliente, ColaEspera, Contacto, SyncSession  # noqa: E402
+from agent.memory import limpiar_historial, obtener_historial  # noqa: E402
+
+CASOS_PATH = Path(__file__).parent / "casos_prueba.yaml"
+APP_SECRET = os.getenv("META_APP_SECRET", "")
+
+
+def telefono_para(caso_id: str) -> str:
+    return "57300" + str(abs(hash(caso_id)) % 10_000_000).zfill(7)
+
+
+def construir_payload(telefono: str, texto: str, nombre: str = "Tester") -> dict:
+    return {
+        "entry": [{
+            "changes": [{
+                "value": {
+                    "contacts": [{"profile": {"name": nombre}}],
+                    "messages": [{
+                        "from": telefono,
+                        "type": "text",
+                        "id": f"wamid.test.{int(time.time() * 1000)}",
+                        "text": {"body": texto},
+                    }],
+                },
+            }],
+        }],
+    }
+
+
+def firmar(cuerpo: bytes) -> str:
+    if not APP_SECRET:
+        raise SystemExit("META_APP_SECRET no está definido en .env — no se puede firmar el webhook.")
+    return "sha256=" + hmac.new(APP_SECRET.encode(), cuerpo, hashlib.sha256).hexdigest()
+
+
+async def enviar_webhook(client: httpx.AsyncClient, base_url: str, telefono: str, texto: str) -> dict:
+    cuerpo = json.dumps(construir_payload(telefono, texto)).encode()
+    headers = {"Content-Type": "application/json", "X-Hub-Signature-256": firmar(cuerpo)}
+    resp = await client.post(f"{base_url}/webhook", content=cuerpo, headers=headers, timeout=60)
+    resp.raise_for_status()
+    return resp.json()
+
+
+def check_keywords(respuesta: str, patrones: list[str]) -> tuple[bool, str]:
+    for patron in patrones:
+        if re.search(patron, respuesta, re.IGNORECASE):
+            return True, ""
+    return False, f"ninguno de los patrones {patrones} aparece en la respuesta"
+
+
+# side_effects: mismas comprobaciones que test_scenarios.py (BD/memoria real, sin duplicar import cruzado)
+def check_side_effect(efecto: dict, telefono: str) -> tuple[bool, str]:
+    tipo = efecto["tipo"]
+
+    if tipo == "contacto_existe":
+        with SyncSession() as session:
+            c = session.get(Contacto, telefono)
+        if not c:
+            return False, f"no hay Contacto para {telefono}"
+        if "nombre_contiene" in efecto and not re.search(efecto["nombre_contiene"], c.nombre or "", re.IGNORECASE):
+            return False, f"nombre '{c.nombre}' no matchea {efecto['nombre_contiene']}"
+        return True, ""
+
+    if tipo == "lead_existe":
+        leads = [l for l in tools._CRM_DB.values() if l["telefono"] == telefono]
+        if not leads:
+            return False, f"no hay lead en _CRM_DB para {telefono} (nota: si el servidor corre en otro proceso, este dict en memoria no es visible aquí)"
+        if "interes_contiene" in efecto:
+            if not any(re.search(efecto["interes_contiene"], l["interes"] or "", re.IGNORECASE) for l in leads):
+                return False, f"ningún lead matchea interes~={efecto['interes_contiene']}"
+        return True, ""
+
+    if tipo == "lead_o_contacto":
+        with SyncSession() as session:
+            c = session.get(Contacto, telefono)
+        if not c:
+            return False, f"no hay Contacto para {telefono}"
+        if "nombre_contiene" in efecto and not re.search(efecto["nombre_contiene"], c.nombre or "", re.IGNORECASE):
+            return False, f"nombre '{c.nombre}' no matchea {efecto['nombre_contiene']}"
+        return True, ""
+
+    if tipo == "cita_o_alternativa":
+        return True, "no verificable vía BD para citas (viven en memoria del proceso del servidor); revisar respuesta/Calendar manualmente"
+
+    if tipo == "ticket_creado":
+        return True, "no verificable vía BD para tickets (viven en memoria del proceso del servidor); revisar respuesta manualmente"
+
+    if tipo == "escalamiento_registrado":
+        with SyncSession() as session:
+            en_cola = session.get(ColaEspera, telefono)
+            contacto = session.get(Contacto, telefono)
+        conectado = contacto and contacto.atendido_por is not None
+        if not en_cola and not conectado:
+            return False, "no quedó en cola ni conectado a un agente"
+        return True, ""
+
+    return False, f"tipo de side_effect desconocido: {tipo}"
+
+
+async def correr_caso(client: httpx.AsyncClient, base_url: str, caso: dict, telefono: str) -> tuple[bool, list[str]]:
+    errores = []
+
+    with SyncSession() as session:
+        for modelo in (Cliente, ColaEspera, Contacto):
+            obj = session.get(modelo, telefono)
+            if obj:
+                session.delete(obj)
+        session.commit()
+    await limpiar_historial(telefono)
+
+    for turno in caso["turnos"]:
+        estado = await enviar_webhook(client, base_url, telefono, turno["usuario"])
+        if estado.get("status") != "ok":
+            errores.append(f"webhook devolvió status={estado.get('status')} en vez de 'ok'")
+            continue
+
+        historial = await obtener_historial(telefono)
+        respuesta = historial[-1]["content"] if historial and historial[-1]["role"] == "assistant" else ""
+
+        if not respuesta.strip():
+            errores.append("no se registró respuesta del asistente en el historial")
+
+        patrones = turno.get("espera_keywords")
+        if patrones:
+            ok, msg = check_keywords(respuesta, patrones)
+            if not ok:
+                errores.append(f"turno {turno['usuario']!r}: {msg} (respuesta: {respuesta!r})")
+
+    for efecto in caso.get("side_effects", []):
+        ok, msg = check_side_effect(efecto, telefono)
+        if not ok:
+            errores.append(f"side_effect {efecto['tipo']}: {msg}")
+        elif msg:
+            print(f"    (aviso) {efecto['tipo']}: {msg}")
+
+    return len(errores) == 0, errores
+
+
+async def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("ids", nargs="*", help="IDs específicos a correr (default: todos)")
+    parser.add_argument("--categoria", help="Filtrar por categoría")
+    parser.add_argument("--base-url", default="http://localhost:8000", help="URL del servidor (local o túnel)")
+    parser.add_argument(
+        "--telefono-real",
+        help="Si se da, todos los turnos usan este número real en vez de uno sintético por caso "
+             "(así puedes ver los mensajes llegar de verdad a tu WhatsApp). Corre los casos secuencialmente.",
+    )
+    args = parser.parse_args()
+
+    casos = yaml.safe_load(CASOS_PATH.read_text(encoding="utf-8"))
+    if args.ids:
+        casos = [c for c in casos if c["id"] in args.ids]
+    if args.categoria:
+        casos = [c for c in casos if c["categoria"] == args.categoria]
+    if not casos:
+        print("No hay casos que coincidan con el filtro.")
+        return
+
+    async with httpx.AsyncClient() as client:
+        try:
+            r = await client.get(args.base_url, timeout=10)
+            r.raise_for_status()
+        except Exception as e:
+            raise SystemExit(f"No se pudo conectar a {args.base_url} ({e}). ¿Está el servidor corriendo?")
+
+        resultados = []
+        for caso in casos:
+            telefono = args.telefono_real or telefono_para(caso["id"])
+            print(f"[{caso['id']}] {caso['descripcion']}  (tel={telefono})")
+            ok, errores = await correr_caso(client, args.base_url, caso, telefono)
+            resultados.append((caso["id"], ok, errores))
+            print("  OK" if ok else "  FALLÓ:")
+            for e in errores:
+                print(f"    - {e}")
+
+    total = len(resultados)
+    exitosos = sum(1 for _, ok, _ in resultados if ok)
+    print(f"\n{exitosos}/{total} casos pasaron")
+    if exitosos < total:
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())
