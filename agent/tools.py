@@ -1,0 +1,387 @@
+"""Herramientas (CRM, Calendar, soporte, escalamiento). Precios/ofertas leen
+de Postgres (editable desde NocoDB); Calendar y correo usan Google APIs
+reales. CRM y soporte siguen simulados en memoria para el demo."""
+
+import os
+import random
+import uuid
+from datetime import date, datetime, timedelta, timezone
+from pathlib import Path
+
+import httpx
+
+from .db import Agente, Area, Cliente, ColaEspera, Contacto, Modulo, Oferta, Parametro, SyncSession
+from .integrations.google import crear_evento_calendar, enviar_email, horarios_libres
+
+KNOWLEDGE_DIR = Path(__file__).parent.parent / "knowledge"
+EMAIL_SOPORTE = os.getenv("EMAIL_SOPORTE", "soporte@sysplus.com")
+
+# ponytail: mismo patrón sync de agent/providers/meta.py, duplicado a propósito
+# porque tools.py corre sync y el proveedor async vive en la capa del webhook.
+_META_TOKEN = os.getenv("META_ACCESS_TOKEN")
+_META_PHONE_ID = os.getenv("META_PHONE_NUMBER_ID")
+_META_API_URL = f"https://graph.facebook.com/v20.0/{_META_PHONE_ID}/messages"
+
+
+def _enviar_whatsapp_directo(telefono: str, texto: str) -> None:
+    httpx.post(
+        _META_API_URL,
+        headers={"Authorization": f"Bearer {_META_TOKEN}", "Content-Type": "application/json"},
+        json={"messaging_product": "whatsapp", "to": telefono, "type": "text", "text": {"body": texto}},
+    )
+
+_CRM_DB: dict[str, dict] = {}
+_CITAS_DB: list[dict] = []
+_CASOS_SOPORTE: dict[str, dict] = {}
+
+
+def cargar_info_negocio() -> str:
+    return "\n\n".join(
+        path.read_text(encoding="utf-8")
+        for path in sorted(KNOWLEDGE_DIR.glob("*.md"))
+    )
+
+
+def buscar_en_knowledge(modulo: str) -> str:
+    contenido = cargar_info_negocio()
+    bloques = contenido.split("## ")
+    for bloque in bloques:
+        if bloque.lower().startswith(modulo.lower()):
+            return "## " + bloque.strip()
+    with SyncSession() as session:
+        nombres = [m.nombre for m in session.query(Modulo).all()]
+    return f"No encontré información específica sobre '{modulo}'. Módulos disponibles: {', '.join(nombres)}."
+
+
+def _oferta_activa(session, modulo_id: int) -> Oferta | None:
+    hoy = date.today()
+    return (
+        session.query(Oferta)
+        .filter(
+            Oferta.modulo_id == modulo_id,
+            Oferta.activo.is_(True),
+            Oferta.fecha_inicio <= hoy,
+            Oferta.fecha_fin >= hoy,
+        )
+        .first()
+    )
+
+
+def consultar_precio_modulo(modulo: str) -> dict:
+    with SyncSession() as session:
+        mod = session.query(Modulo).filter(Modulo.nombre.ilike(modulo)).first()
+        if not mod:
+            return {"error": f"Módulo '{modulo}' no encontrado."}
+        oferta = _oferta_activa(session, mod.id)
+        if not oferta:
+            return {"modulo": mod.nombre, "precio_mensual_cop": mod.precio_mensual_cop, "moneda": "COP"}
+        precio_final = round(mod.precio_mensual_cop * (1 - oferta.descuento_pct / 100))
+        return {
+            "modulo": mod.nombre,
+            "precio_mensual_cop": precio_final,
+            "precio_regular_cop": mod.precio_mensual_cop,
+            "descuento_pct": oferta.descuento_pct,
+            "moneda": "COP",
+        }
+
+
+def consultar_ofertas_activas() -> list[dict]:
+    hoy = date.today()
+    with SyncSession() as session:
+        ofertas = (
+            session.query(Oferta, Modulo)
+            .join(Modulo, Oferta.modulo_id == Modulo.id)
+            .filter(Oferta.activo.is_(True), Oferta.fecha_inicio <= hoy, Oferta.fecha_fin >= hoy)
+            .all()
+        )
+    return [
+        {
+            "modulo": modulo.nombre,
+            "descuento_pct": oferta.descuento_pct,
+            "precio_final_cop": round(modulo.precio_mensual_cop * (1 - oferta.descuento_pct / 100)),
+            "vigente_hasta": oferta.fecha_fin.isoformat(),
+        }
+        for oferta, modulo in ofertas
+    ]
+
+
+def consultar_parametro(clave: str) -> dict:
+    """Consulta un parámetro de configuración editable (horario de atención, email de soporte, etc)."""
+    with SyncSession() as session:
+        param = session.query(Parametro).filter(Parametro.clave == clave).first()
+        if not param:
+            return {"error": f"Parámetro '{clave}' no encontrado."}
+        return {"clave": param.clave, "valor": param.valor}
+
+
+def registrar_lead_crm(nombre: str, telefono: str, empresa: str, interes: str) -> dict:
+    lead_id = str(uuid.uuid4())[:8]
+    _CRM_DB[lead_id] = {
+        "id": lead_id, "nombre": nombre, "telefono": telefono,
+        "empresa": empresa, "interes": interes,
+        "fecha": datetime.now().isoformat(), "estado": "nuevo",
+    }
+    return {"lead_id": lead_id, "estado": "registrado"}
+
+
+def consultar_estado_cliente(telefono: str) -> dict:
+    for lead in _CRM_DB.values():
+        if lead["telefono"] == telefono:
+            return lead
+    return {"estado": "no_encontrado", "mensaje": "No hay registro previo en el CRM para este número."}
+
+
+def _get_area(session, nombre: str) -> Area:
+    """Resuelve un nombre de área (string libre del LLM) a su fila Area, creándola si no existe."""
+    area = session.query(Area).filter(Area.nombre.ilike(nombre)).first()
+    if not area:
+        area = Area(nombre=nombre)
+        session.add(area)
+        session.flush()
+    return area
+
+
+def _agentes_por_area(session, area: str) -> list[Agente]:
+    return (
+        session.query(Agente)
+        .join(Area, Agente.area_id == Area.id)
+        .filter(Area.nombre.ilike(area), Agente.activo.is_(True))
+        .order_by(Agente.id)
+        .all()
+    )
+
+
+def _ocupados() -> set:
+    """IDs de agentes con un contacto activo (atendido_por no nulo) ahora mismo."""
+    with SyncSession() as session:
+        return {aid for (aid,) in session.query(Contacto.atendido_por).filter(Contacto.atendido_por.isnot(None)).all()}
+
+
+def _upsert_contacto(session, telefono: str, nombre: str) -> Contacto:
+    contacto = session.get(Contacto, telefono)
+    if not contacto:
+        contacto = Contacto(telefono=telefono, nombre=nombre)
+        session.add(contacto)
+    else:
+        contacto.nombre = nombre
+    return contacto
+
+
+def guardar_datos_contacto(
+    telefono: str,
+    nombre: str,
+    empresa: str | None = None,
+    correo: str | None = None,
+    ciudad: str | None = None,
+) -> dict:
+    """Guarda/actualiza los datos básicos de quien escribe (nombre, empresa, correo, ciudad).
+    Llamar apenas el usuario los dé, típicamente al inicio de la conversación."""
+    with SyncSession() as session:
+        contacto = _upsert_contacto(session, telefono, nombre)
+        if empresa is not None:
+            contacto.empresa = empresa
+        if correo is not None:
+            contacto.correo = correo
+        if ciudad is not None:
+            contacto.ciudad = ciudad
+        session.commit()
+        return {"telefono": telefono, "estado": "guardado"}
+
+
+def agendar_cita(nombre: str, telefono: str, motivo: str, fecha: str, hora: str, area: str) -> dict:
+    """Agenda una cita si el horario pedido está libre en el calendario de la primera
+    persona disponible de esa área (según su rango horario propio). fecha: 'YYYY-MM-DD'.
+    hora: 'HH:MM', debe ser una de HORARIOS_DISPONIBLES (09:00, 10:30, 14:00, 16:00).
+    area: p.ej. 'comercial' o 'soporte'. Si nadie de esa área está libre, devuelve
+    alternativas libres ese mismo día (unión de todas las personas del área)."""
+    with SyncSession() as session:
+        personas = _agentes_por_area(session, area)
+    if not personas:
+        return {"disponible": False, "mensaje": f"No hay nadie configurado para el área '{area}'."}
+
+    alternativas: set[str] = set()
+    for persona in personas:
+        libres = horarios_libres(fecha, persona.email, persona.hora_inicio, persona.hora_fin)
+        alternativas.update(libres)
+        if hora in libres:
+            cita_id = str(uuid.uuid4())[:8]
+            cita = {
+                "cita_id": cita_id, "nombre": nombre, "telefono": telefono,
+                "motivo": motivo, "fecha": fecha, "hora": hora,
+                "area": area, "atendido_por": persona.nombre, "atendido_email": persona.email,
+            }
+            _CITAS_DB.append(cita)
+            try:
+                evento = crear_evento_calendar(nombre, telefono, motivo, fecha, hora, persona.email)
+                cita["calendar_link"] = evento.get("htmlLink")
+            except Exception as e:
+                cita["calendar_error"] = str(e)
+            return cita
+
+    libres = sorted(alternativas)
+    return {
+        "disponible": False,
+        "alternativas": libres,
+        "mensaje": (
+            f"El horario {hora} del {fecha} no está disponible en el área '{area}'."
+            + (f" Libres ese día: {', '.join(libres)}." if libres else " No hay horarios libres ese día, prueba otra fecha.")
+        ),
+    }
+
+
+def consultar_disponibilidad_agenda(area: str) -> list[dict]:
+    """Horarios realmente libres (unión de todas las personas activas del área,
+    respetando el rango horario de cada una) para los próximos 5 días."""
+    with SyncSession() as session:
+        personas = _agentes_por_area(session, area)
+    dias = [(datetime.now() + timedelta(days=i)).strftime("%Y-%m-%d") for i in range(1, 6)]
+    resultado = []
+    for d in dias:
+        libres: set[str] = set()
+        for persona in personas:
+            libres.update(horarios_libres(d, persona.email, persona.hora_inicio, persona.hora_fin))
+        resultado.append({"fecha": d, "horarios_libres": sorted(libres)})
+    return resultado
+
+
+def crear_ticket_soporte(telefono: str, descripcion: str, modulo: str) -> dict:
+    ticket_id = f"TCK-{random.randint(1000, 9999)}"
+    _CASOS_SOPORTE[ticket_id] = {
+        "ticket_id": ticket_id, "telefono": telefono, "descripcion": descripcion,
+        "modulo": modulo, "estado": "abierto", "fecha": datetime.now().isoformat(),
+    }
+    return _CASOS_SOPORTE[ticket_id]
+
+
+def consultar_ticket_soporte(ticket_id: str) -> dict:
+    return _CASOS_SOPORTE.get(ticket_id, {"error": "Ticket no encontrado."})
+
+
+def escalar_a_humano(telefono: str, nombre: str, resumen_caso: str, area: str) -> dict:
+    """Escala la conversación a un agente humano del área dada. Busca el primer agente
+    del área que NO esté ya conectado con otro cliente. Si es de opción B (mismo
+    WhatsApp del bot), lo conecta y el bot se pausa para este cliente. Si es de
+    opción A, le notifica el caso por WhatsApp aparte (no se pausa). Si todos los
+    agentes del área están ocupados, encola al cliente e informa su posición.
+    Siempre registra el caso por correo a EMAIL_SOPORTE."""
+    caso_id = f"ESC-{random.randint(1000, 9999)}"
+    cuerpo = f"Cliente: {nombre}\nTeléfono: {telefono}\nResumen: {resumen_caso}"
+    try:
+        enviar_email(EMAIL_SOPORTE, f"[{caso_id}] Escalamiento SysBot - {nombre}", cuerpo)
+        email_enviado = True
+    except Exception:
+        email_enviado = False
+
+    with SyncSession() as session:
+        agentes = _agentes_por_area(session, area)
+        numero_bot = session.query(Parametro).filter(Parametro.clave == "whatsapp_numero_bot").first()
+        if not agentes:
+            return {
+                "caso_id": caso_id, "estado": "escalado", "modo": None, "atendido_por": None,
+                "email_enviado": email_enviado,
+                "mensaje": f"Caso {caso_id} registrado, pero no hay agentes configurados para el área '{area}'.",
+            }
+
+        ocupados = _ocupados()
+        libres = [a for a in agentes if a.id not in ocupados]
+        if libres:
+            agente = libres[0]
+            if agente.telefono and numero_bot and agente.telefono == numero_bot.valor:
+                modo = "conectado"
+                contacto = _upsert_contacto(session, telefono, nombre)
+                contacto.atendido_por = agente.id
+                contacto.conectado_en = datetime.now(timezone.utc)
+                session.commit()
+            else:
+                modo = "notificacion"
+                _enviar_whatsapp_directo(
+                    agente.telefono,
+                    f"[{caso_id}] Nuevo caso de {nombre} ({telefono}) - área {area}\n{resumen_caso}",
+                )
+            return {
+                "caso_id": caso_id, "estado": "escalado", "modo": modo, "atendido_por": agente.nombre,
+                "email_enviado": email_enviado,
+                "mensaje": (
+                    f"Caso {caso_id} registrado. Un asesor humano de SysPlus dará "
+                    f"seguimiento a {nombre} ({telefono}). Resumen: {resumen_caso}"
+                ),
+            }
+
+        # todos ocupados -> cola
+        _upsert_contacto(session, telefono, nombre)
+        area_row = _get_area(session, area)
+        delante = (
+            session.query(ColaEspera)
+            .filter(ColaEspera.area_id == area_row.id, ColaEspera.hasta.is_(None))
+            .count()
+        )
+        espera = session.get(ColaEspera, telefono)
+        if espera:
+            espera.area_id = area_row.id
+            espera.desde = datetime.now(timezone.utc)
+            espera.hasta = None
+        else:
+            session.add(ColaEspera(telefono=telefono, area_id=area_row.id))
+        session.commit()
+        return {
+            "caso_id": caso_id, "estado": "en_cola", "posicion": delante + 1,
+            "email_enviado": email_enviado,
+            "mensaje": (
+                f"Caso {caso_id} registrado. Todos los agentes de '{area}' están ocupados ahora mismo. "
+                f"Hay {delante} persona(s) delante de ti, en breve te atenderán."
+            ),
+        }
+
+
+def promover_colas() -> list[dict]:
+    """Conecta clientes en cola con agentes de opción B que hayan quedado libres.
+    Se llama en cada webhook (no hay scheduler). Devuelve [{telefono, mensaje}] a notificar."""
+    promovidos = []
+    with SyncSession() as session:
+        numero_bot = session.query(Parametro).filter(Parametro.clave == "whatsapp_numero_bot").first()
+        ocupados = _ocupados()
+        areas = session.query(Area).join(ColaEspera, ColaEspera.area_id == Area.id).distinct().all()
+        for area_row in areas:
+            libres = [
+                a for a in _agentes_por_area(session, area_row.nombre)
+                if a.id not in ocupados and a.telefono and numero_bot and a.telefono == numero_bot.valor
+            ]
+            cola = (
+                session.query(ColaEspera)
+                .filter(ColaEspera.area_id == area_row.id, ColaEspera.hasta.is_(None))
+                .order_by(ColaEspera.desde)
+                .all()
+            )
+            for agente, espera in zip(libres, cola):
+                contacto = session.get(Contacto, espera.telefono)
+                contacto.atendido_por = agente.id
+                contacto.conectado_en = datetime.now(timezone.utc)
+                ocupados.add(agente.id)
+                espera.agente_id = agente.id
+                espera.hasta = datetime.now(timezone.utc)
+                promovidos.append({
+                    "telefono": espera.telefono,
+                    "mensaje": f"¡Ya te toca {contacto.nombre}! {agente.nombre} te va a atender ahora, un momento.",
+                })
+        session.commit()
+    return promovidos
+
+
+def registrar_cliente(telefono: str, numero_identificacion: str | None = None, nit_empresa: str | None = None) -> dict:
+    """Marca un contacto existente como cliente confirmado, guardando su identificación
+    (y la de su empresa, si aplica). Requiere que el contacto ya exista (se crea al
+    escalar o al registrar_lead_crm)."""
+    with SyncSession() as session:
+        contacto = session.get(Contacto, telefono)
+        if not contacto:
+            return {"error": f"No hay contacto registrado con el teléfono {telefono}."}
+        cliente = session.get(Cliente, telefono)
+        if not cliente:
+            cliente = Cliente(telefono=telefono)
+            session.add(cliente)
+        if numero_identificacion is not None:
+            cliente.numero_identificacion = numero_identificacion
+        if nit_empresa is not None:
+            cliente.nit_empresa = nit_empresa
+        session.commit()
+        return {"telefono": telefono, "estado": "cliente_registrado"}
