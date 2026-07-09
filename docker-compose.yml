@@ -1,0 +1,57 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: sysbot
+      POSTGRES_PASSWORD: sysbot
+      POSTGRES_DB: sysbot
+    ports:
+      - "5441:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./init-db:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sysbot -d sysbot"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  nocodb:
+    image: nocodb/nocodb:latest
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    environment:
+      NC_DB: "pg://postgres:5432?u=sysbot&p=sysbot&d=nocodb"
+    volumes:
+      - ncdata:/usr/app/data
+
+  seed:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file:
+      - .env
+    command: ["python", "scripts/seed_db.py"]
+    restart: "no"
+
+  sysbot:
+    build: .
+    depends_on:
+      postgres:
+        condition: service_healthy
+      seed:
+        condition: service_completed_successfully
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./token.json:/app/token.json
+
+volumes:
+  pgdata:
+  ncdata:
