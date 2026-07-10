@@ -359,19 +359,37 @@ def escalar_a_humano(telefono: str, nombre: str, resumen_caso: str, area: str) -
                 contacto.atendido_por = agente.id
                 contacto.conectado_en = datetime.now(timezone.utc)
                 session.commit()
-            else:
-                modo = "notificacion"
+                mensaje = (
+                    f"Caso {caso_id} registrado. Un asesor humano de SysPlus dará "
+                    f"seguimiento a {nombre} ({telefono}). Resumen: {resumen_caso}"
+                )
+            elif agente.telefono:
+                # opción A: agente tiene número propio (distinto del bot) -> le
+                # llega el resumen por WhatsApp aparte y se le pasa al usuario
+                # un link directo wa.me para que pueda escribirle sin esperar.
+                modo = "notificacion_con_contacto"
                 _enviar_whatsapp_directo(
                     agente.telefono,
                     f"[{caso_id}] Nuevo caso de {nombre} ({telefono}) - área {area}\n{resumen_caso}",
                 )
+                link_agente = f"https://wa.me/{agente.telefono.lstrip('+')}"
+                mensaje = (
+                    f"Caso {caso_id} registrado y enviado a {agente.nombre}, quien dará "
+                    f"seguimiento a tu caso. Resumen enviado: {resumen_caso}\n"
+                    f"También puedes escribirle directamente aquí: {link_agente}"
+                )
+            else:
+                # sin teléfono de agente configurado -> no hay a quién notificar
+                # ni link que dar; el caso ya quedó por correo a EMAIL_SOPORTE.
+                modo = "notificacion"
+                mensaje = (
+                    f"Caso {caso_id} registrado. Un asesor de SysPlus se comunicará contigo "
+                    f"a la brevedad posible. Resumen: {resumen_caso}"
+                )
             return {
                 "caso_id": caso_id, "estado": "escalado", "modo": modo, "atendido_por": agente.nombre,
                 "email_enviado": email_enviado,
-                "mensaje": (
-                    f"Caso {caso_id} registrado. Un asesor humano de SysPlus dará "
-                    f"seguimiento a {nombre} ({telefono}). Resumen: {resumen_caso}"
-                ),
+                "mensaje": mensaje,
             }
 
         # todos ocupados -> cola
