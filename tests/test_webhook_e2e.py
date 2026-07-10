@@ -35,6 +35,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from agent import tools  # noqa: E402
+from agent.integrations import espocrm  # noqa: E402
 from agent.db import Cliente, ColaEspera, Contacto, SyncSession  # noqa: E402
 from agent.memory import limpiar_historial, obtener_historial  # noqa: E402
 
@@ -99,12 +100,14 @@ def check_side_effect(efecto: dict, telefono: str) -> tuple[bool, str]:
         return True, ""
 
     if tipo == "lead_existe":
-        leads = [l for l in tools._CRM_DB.values() if l["telefono"] == telefono]
-        if not leads:
-            return False, f"no hay lead en _CRM_DB para {telefono} (nota: si el servidor corre en otro proceso, este dict en memoria no es visible aquí)"
-        if "interes_contiene" in efecto:
-            if not any(re.search(efecto["interes_contiene"], l["interes"] or "", re.IGNORECASE) for l in leads):
-                return False, f"ningún lead matchea interes~={efecto['interes_contiene']}"
+        try:
+            lead = espocrm.consultar_lead(telefono)
+        except httpx.HTTPError as e:
+            return True, f"no verificable, CRM no disponible: {e}"
+        if not lead:
+            return False, f"no hay lead en EspoCRM para {telefono}"
+        if "interes_contiene" in efecto and not re.search(efecto["interes_contiene"], lead.get("description") or "", re.IGNORECASE):
+            return False, f"lead no matchea interes~={efecto['interes_contiene']}"
         return True, ""
 
     if tipo == "lead_o_contacto":
@@ -144,6 +147,21 @@ async def correr_caso(client: httpx.AsyncClient, base_url: str, caso: dict, tele
                 session.delete(obj)
         session.commit()
     await limpiar_historial(telefono)
+
+    # ponytail: setup_previo ocupa estado real (p.ej. un horario de agenda) desde un
+    # teléfono aparte, para que el caso principal encuentre una precondición determinista
+    # sin ensuciar la conversación bajo prueba.
+    for previo in caso.get("setup_previo", []):
+        tel_previo = "57" + str(abs(hash(caso["id"] + "setup")) % 900_000_000 + 100_000_000)
+        with SyncSession() as session:
+            for modelo in (Cliente, ColaEspera, Contacto):
+                obj = session.get(modelo, tel_previo)
+                if obj:
+                    session.delete(obj)
+            session.commit()
+        await limpiar_historial(tel_previo)
+        await enviar_webhook(client, base_url, tel_previo, previo["usuario"])
+        await asyncio.sleep(4)
 
     for turno in caso["turnos"]:
         await asyncio.sleep(4)  # ponytail: evita saturar la cuota gratuita de Gemini (15 req/min)
@@ -204,6 +222,8 @@ async def main():
 
         resultados = []
         for caso in casos:
+            if resultados:
+                await asyncio.sleep(4)  # ponytail: gap entre casos, mismo motivo que entre turnos
             telefono = args.telefono_real or telefono_para(caso["id"])
             print(f"[{caso['id']}] {caso['descripcion']}  (tel={telefono})")
             ok, errores = await correr_caso(client, args.base_url, caso, telefono)
