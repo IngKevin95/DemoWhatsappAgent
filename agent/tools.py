@@ -1,17 +1,24 @@
 """Herramientas (CRM, Calendar, soporte, escalamiento). Precios/ofertas leen
 de Postgres (editable desde NocoDB); Calendar y correo usan Google APIs
-reales. CRM y soporte siguen simulados en memoria para el demo."""
+reales. CRM (leads/casos) usa EspoCRM vía API REST; licencias/soporte
+consultan Firebird directamente. Ambos viven en infra de demo separada
+(docker-compose.demo.yml) y degradan con gracia si no está levantada."""
 
+import logging
 import os
 import random
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
+import firebird.driver as fb
 import httpx
 
 from .db import Agente, Area, Cliente, ColaEspera, Contacto, Modulo, Oferta, Parametro, SyncSession
+from .integrations import espocrm
 from .integrations.google import crear_evento_calendar, enviar_email, horarios_libres
+
+logger = logging.getLogger(__name__)
 
 KNOWLEDGE_DIR = Path(__file__).parent.parent / "knowledge"
 EMAIL_SOPORTE = os.getenv("EMAIL_SOPORTE", "soporte@sysplus.com")
@@ -30,9 +37,10 @@ def _enviar_whatsapp_directo(telefono: str, texto: str) -> None:
         json={"messaging_product": "whatsapp", "to": telefono, "type": "text", "text": {"body": texto}},
     )
 
-_CRM_DB: dict[str, dict] = {}
 _CITAS_DB: list[dict] = []
-_CASOS_SOPORTE: dict[str, dict] = {}
+
+FIREBIRD_HOST = os.getenv("FIREBIRD_HOST", "localhost")
+FIREBIRD_PASSWORD = os.getenv("ISC_PASSWORD", "sysbot")
 
 
 def cargar_info_negocio() -> str:
@@ -115,20 +123,49 @@ def consultar_parametro(clave: str) -> dict:
 
 
 def registrar_lead_crm(nombre: str, telefono: str, empresa: str, interes: str) -> dict:
-    lead_id = str(uuid.uuid4())[:8]
-    _CRM_DB[lead_id] = {
-        "id": lead_id, "nombre": nombre, "telefono": telefono,
-        "empresa": empresa, "interes": interes,
-        "fecha": datetime.now().isoformat(), "estado": "nuevo",
-    }
-    return {"lead_id": lead_id, "estado": "registrado"}
+    try:
+        lead = espocrm.crear_lead(nombre, telefono, empresa, "", interes)
+        return {"lead_id": lead.get("id"), "estado": "registrado"}
+    except httpx.HTTPError as e:
+        return {"estado": "error", "mensaje": f"CRM no disponible: {e}"}
 
 
 def consultar_estado_cliente(telefono: str) -> dict:
-    for lead in _CRM_DB.values():
-        if lead["telefono"] == telefono:
-            return lead
-    return {"estado": "no_encontrado", "mensaje": "No hay registro previo en el CRM para este número."}
+    try:
+        lead = espocrm.consultar_lead(telefono)
+    except httpx.HTTPError as e:
+        return {"estado": "error", "mensaje": f"CRM no disponible: {e}"}
+    if not lead:
+        return {"estado": "no_encontrado", "mensaje": "No hay registro previo en el CRM para este número."}
+    return lead
+
+
+def consultar_licencia(identificacion: str) -> dict:
+    """Consulta si una cédula/NIT tiene licencia y contrato de soporte activo en Firebird.
+    Llamar antes de crear un ticket o escalar un caso a soporte."""
+    dsn = f"{FIREBIRD_HOST}/3050:licencias.fdb"
+    try:
+        con = fb.connect(database=dsn, user="sysdba", password=FIREBIRD_PASSWORD)
+    except Exception as e:
+        return {"estado": "sin_licencia", "nota": f"Servicio de licencias no disponible: {e}"}
+    try:
+        cur = con.cursor()
+        cur.execute(
+            "SELECT MODULO, SOPORTE_ACTIVO, SOPORTE_HASTA FROM LICENCIAS WHERE IDENTIFICACION = ?",
+            (identificacion,),
+        )
+        fila = cur.fetchone()
+        if not fila:
+            return {"estado": "sin_licencia"}
+        modulo, soporte_activo, soporte_hasta = fila
+        estado = "con_licencia_con_soporte" if soporte_activo else "con_licencia_sin_soporte"
+        return {
+            "estado": estado,
+            "modulo": modulo,
+            "soporte_hasta": soporte_hasta.isoformat() if soporte_hasta else None,
+        }
+    finally:
+        con.close()
 
 
 def _get_area(session, nombre: str) -> Area:
@@ -202,6 +239,12 @@ def agendar_cita(nombre: str, telefono: str, motivo: str, fecha: str, hora: str,
     alternativas: set[str] = set()
     for persona in personas:
         libres = horarios_libres(fecha, persona.email, persona.hora_inicio, persona.hora_fin)
+        # ponytail: horarios_libres() consulta el Calendar real vía freebusy, que no
+        # lanza error ni refleja huecos si el service account no tiene acceso al
+        # calendario (ver crear_evento_calendar) — _CITAS_DB es la fuente de verdad
+        # de respaldo para no doble-agendar aunque el Calendar esté mal configurado.
+        ocupadas_local = {c["hora"] for c in _CITAS_DB if c["atendido_email"] == persona.email and c["fecha"] == fecha}
+        libres = [h for h in libres if h not in ocupadas_local]
         alternativas.update(libres)
         if hora in libres:
             cita_id = str(uuid.uuid4())[:8]
@@ -215,7 +258,15 @@ def agendar_cita(nombre: str, telefono: str, motivo: str, fecha: str, hora: str,
                 evento = crear_evento_calendar(nombre, telefono, motivo, fecha, hora, persona.email)
                 cita["calendar_link"] = evento.get("htmlLink")
             except Exception as e:
+                # ponytail: nunca dejar esto en silencio — sin log, una cita "exitosa" para
+                # el cliente puede no existir realmente en el calendario del agente.
+                logger.exception("crear_evento_calendar falló para cita_id=%s email=%s", cita_id, persona.email)
                 cita["calendar_error"] = str(e)
+            try:
+                reunion = espocrm.crear_reunion(nombre, telefono, motivo, fecha, hora)
+                cita["crm_meeting_id"] = reunion.get("id")
+            except httpx.HTTPError as e:
+                cita["crm_meeting_error"] = str(e)
             return cita
 
     libres = sorted(alternativas)
@@ -245,16 +296,28 @@ def consultar_disponibilidad_agenda(area: str) -> list[dict]:
 
 
 def crear_ticket_soporte(telefono: str, descripcion: str, modulo: str) -> dict:
-    ticket_id = f"TCK-{random.randint(1000, 9999)}"
-    _CASOS_SOPORTE[ticket_id] = {
-        "ticket_id": ticket_id, "telefono": telefono, "descripcion": descripcion,
-        "modulo": modulo, "estado": "abierto", "fecha": datetime.now().isoformat(),
-    }
-    return _CASOS_SOPORTE[ticket_id]
+    try:
+        caso = espocrm.crear_caso(telefono, descripcion, modulo)
+        return {"ticket_id": caso.get("id"), "estado": "abierto"}
+    except httpx.HTTPError as e:
+        return {"estado": "error", "mensaje": f"CRM no disponible: {e}"}
 
 
 def consultar_ticket_soporte(ticket_id: str) -> dict:
-    return _CASOS_SOPORTE.get(ticket_id, {"error": "Ticket no encontrado."})
+    try:
+        return espocrm.consultar_caso(ticket_id)
+    except httpx.HTTPError as e:
+        return {"error": f"CRM no disponible: {e}"}
+
+
+def crear_tarea(nombre: str, descripcion: str, fecha_vencimiento: str | None = None) -> dict:
+    """Crea una tarea interna de seguimiento en el CRM (p.ej. 'llamar mañana para confirmar
+    contrato de soporte', 'enviar cotización'). fecha_vencimiento: 'YYYY-MM-DD', opcional."""
+    try:
+        tarea = espocrm.crear_tarea(nombre, descripcion, fecha_vencimiento)
+        return {"tarea_id": tarea.get("id"), "estado": "creada"}
+    except httpx.HTTPError as e:
+        return {"estado": "error", "mensaje": f"CRM no disponible: {e}"}
 
 
 def escalar_a_humano(telefono: str, nombre: str, resumen_caso: str, area: str) -> dict:
