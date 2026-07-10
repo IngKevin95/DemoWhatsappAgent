@@ -12,6 +12,57 @@ from . import tools
 
 logger = logging.getLogger(__name__)
 
+# ponytail: estas tools reciben `telefono` como identificador del remitente real,
+# no como dato que el modelo deba inventar/extraer del texto. functools.partial no
+# basta (inspect.signature sigue mostrando el parámetro), así que se envuelven a
+# mano sin `telefono` en la firma expuesta al LLM.
+def _tools_con_telefono(telefono: str) -> list:
+    def registrar_lead_crm(nombre: str, empresa: str, interes: str) -> dict:
+        """Registra un lead comercial en el CRM."""
+        return tools.registrar_lead_crm(nombre, telefono, empresa, interes)
+
+    def consultar_estado_cliente() -> dict:
+        """Consulta el estado del lead/cliente en el CRM para el remitente actual."""
+        return tools.consultar_estado_cliente(telefono)
+
+    def guardar_datos_contacto(
+        nombre: str,
+        empresa: str | None = None,
+        correo: str | None = None,
+        ciudad: str | None = None,
+    ) -> dict:
+        """Guarda/actualiza los datos básicos de quien escribe (nombre, empresa, correo, ciudad)."""
+        return tools.guardar_datos_contacto(telefono, nombre, empresa, correo, ciudad)
+
+    def agendar_cita(nombre: str, motivo: str, fecha: str, hora: str, area: str) -> dict:
+        """Agenda una cita si el horario pedido está libre en el calendario de la primera
+        persona disponible de esa área (según su rango horario propio). fecha: 'YYYY-MM-DD'.
+        hora: 'HH:MM', debe ser una de HORARIOS_DISPONIBLES (09:00, 10:30, 14:00, 16:00)."""
+        return tools.agendar_cita(nombre, telefono, motivo, fecha, hora, area)
+
+    def crear_ticket_soporte(descripcion: str, modulo: str) -> dict:
+        """Crea un ticket de soporte para el remitente actual."""
+        return tools.crear_ticket_soporte(telefono, descripcion, modulo)
+
+    def escalar_a_humano(nombre: str, resumen_caso: str, area: str) -> dict:
+        """Escala la conversación a un agente humano del área dada."""
+        return tools.escalar_a_humano(telefono, nombre, resumen_caso, area)
+
+    def registrar_cliente(numero_identificacion: str | None = None, nit_empresa: str | None = None) -> dict:
+        """Marca al remitente actual como cliente confirmado, guardando su identificación
+        (y la de su empresa, si aplica). Requiere que el contacto ya exista."""
+        return tools.registrar_cliente(telefono, numero_identificacion, nit_empresa)
+
+    return [
+        registrar_lead_crm,
+        consultar_estado_cliente,
+        guardar_datos_contacto,
+        agendar_cita,
+        crear_ticket_soporte,
+        escalar_a_humano,
+        registrar_cliente,
+    ]
+
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 # ponytail: variedad fija para no sonar a bot roto si el LLM falla o calla.
@@ -28,21 +79,20 @@ CONFIG_DIR = os.path.join(os.path.dirname(__file__), "..", "config")
 with open(os.path.join(CONFIG_DIR, "prompts.yaml"), encoding="utf-8") as f:
     SYSTEM_PROMPT = yaml.safe_load(f)["system_prompt"]
 
-TOOL_FUNCTIONS = [
+TOOL_FUNCTIONS_FIJAS = [
     tools.buscar_en_knowledge,
     tools.consultar_precio_modulo,
-    tools.registrar_lead_crm,
-    tools.consultar_estado_cliente,
-    tools.agendar_cita,
     tools.consultar_disponibilidad_agenda,
-    tools.crear_ticket_soporte,
     tools.consultar_ticket_soporte,
-    tools.escalar_a_humano,
+    tools.consultar_licencia,
+    tools.crear_tarea,
     tools.consultar_ofertas_activas,
     tools.consultar_parametro,
-    tools.guardar_datos_contacto,
-    tools.registrar_cliente,
 ]
+
+
+def _tools_para(telefono: str) -> list:
+    return TOOL_FUNCTIONS_FIJAS + _tools_con_telefono(telefono)
 
 MODEL_NAME = os.getenv("MODEL_NAME", "gemini-3.1-flash-lite")
 
@@ -77,7 +127,7 @@ async def generar_respuesta(telefono: str, texto_usuario: str, historial: list[d
                 history=_historial_a_contenido(historial),
                 config=types.GenerateContentConfig(
                     system_instruction=SYSTEM_PROMPT + f"\n\nFecha de hoy: {datetime.now().strftime('%Y-%m-%d')}.",
-                    tools=TOOL_FUNCTIONS,
+                    tools=_tools_para(telefono),
                 ),
             )
             respuesta = chat.send_message(texto_usuario)

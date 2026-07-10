@@ -49,8 +49,20 @@ services:
       - "8000:8000"
     env_file:
       - .env
+    environment:
+      ESPOCRM_URL: http://espocrm
+      ESPOCRM_API_KEY: ${ESPOCRM_API_KEY:-}
+      FIREBIRD_HOST: firebird
+    networks:
+      - default
+      - sysplus-demo
     volumes:
       - ./token.json:/app/token.json
+
+networks:
+  default:
+  sysplus-demo:
+    external: true
 
 volumes:
   pgdata:

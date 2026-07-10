@@ -1,5 +1,6 @@
 .env
 *.db
+*.fdb
 __pycache__/
 *.pyc
 .venv/
@@ -7,3 +8,6 @@ venv/
 whatsapp-agentkit/
 credentials.json
 token.json
+cloudflared.exe
+cloudflared.log
+uvicorn.log

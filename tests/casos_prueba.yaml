@@ -85,10 +85,17 @@
 
 - id: 12_agendar_cita_horario_ocupado
   categoria: agenda
-  descripcion: Pide un horario ya tomado; el bot debe ofrecer alternativas, no inventar disponibilidad.
+  descripcion: >
+    Un teléfono aparte (setup_previo) reserva antes el único horario del
+    único agente de 'soporte' hoy a las 09:00; luego Pedro, en conversación
+    limpia, pide ese mismo horario. Como agendar_cita consulta el calendario
+    real (sin depender de memoria de conversación), debe chocar de verdad y
+    ofrecer alternativas.
+  setup_previo:
+    - usuario: "Soy Ana Setup, cel 573009999999, quiero agendar una cita de soporte para hoy a las 09:00, el motivo es revisar un error del módulo de nómina."
   turnos:
     - usuario: "Quiero una cita de soporte para hoy a las 09:00, soy Pedro León, cel 573007654321."
-      espera_keywords: ["disponible|alternativa|libre|otro horario"]
+      espera_keywords: ["disponib|alternativa|libre|otro horario"]
 
 - id: 13_crear_ticket_soporte
   categoria: soporte

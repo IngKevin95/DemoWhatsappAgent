@@ -1,0 +1,73 @@
+services:
+  firebird:
+    image: jacobalberty/firebird:3.0
+    environment:
+      ISC_PASSWORD: sysbot
+      FIREBIRD_DATABASE: licencias.fdb
+    volumes:
+      - firebird_data:/firebird/data
+    ports:
+      - "3050:3050"
+    networks:
+      - sysplus-demo
+    healthcheck:
+      test: ["CMD-SHELL", "test -f /firebird/data/licencias.fdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  seed-firebird:
+    build: .
+    depends_on:
+      firebird:
+        condition: service_healthy
+    environment:
+      FIREBIRD_HOST: firebird
+      ISC_PASSWORD: sysbot
+    command: ["python", "scripts/seed_firebird.py"]
+    restart: "no"
+    networks:
+      - sysplus-demo
+
+  postgres-demo:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: espocrm
+      POSTGRES_PASSWORD: espocrm
+      POSTGRES_DB: espocrm
+    volumes:
+      - postgres_demo_data:/var/lib/postgresql/data
+    networks:
+      - sysplus-demo
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U espocrm -d espocrm"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  espocrm:
+    image: espocrm/espocrm:latest
+    depends_on:
+      postgres-demo:
+        condition: service_healthy
+    environment:
+      ESPOCRM_DATABASE_PLATFORM: Postgresql
+      ESPOCRM_DATABASE_HOST: postgres-demo
+      ESPOCRM_DATABASE_NAME: espocrm
+      ESPOCRM_DATABASE_USER: espocrm
+      ESPOCRM_DATABASE_PASSWORD: espocrm
+      ESPOCRM_ADMIN_USERNAME: admin
+      ESPOCRM_ADMIN_PASSWORD: sysbot123
+      ESPOCRM_SITE_URL: http://localhost:8081
+    ports:
+      - "8081:80"
+    networks:
+      - sysplus-demo
+
+networks:
+  sysplus-demo:
+    external: true
+
+volumes:
+  firebird_data:
+  postgres_demo_data:
