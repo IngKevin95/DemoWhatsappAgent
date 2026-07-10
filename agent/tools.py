@@ -7,6 +7,7 @@ consultan Firebird directamente. Ambos viven en infra de demo separada
 import logging
 import os
 import random
+import threading
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -38,6 +39,7 @@ def _enviar_whatsapp_directo(telefono: str, texto: str) -> None:
     )
 
 _CITAS_DB: list[dict] = []
+_CITAS_LOCK = threading.Lock()  # ponytail: evita doble-agendar el mismo cupo entre threads concurrentes
 
 FIREBIRD_HOST = os.getenv("FIREBIRD_HOST", "localhost")
 FIREBIRD_PASSWORD = os.getenv("ISC_PASSWORD", "sysbot")
@@ -237,37 +239,50 @@ def agendar_cita(nombre: str, telefono: str, motivo: str, fecha: str, hora: str,
         return {"disponible": False, "mensaje": f"No hay nadie configurado para el área '{area}'."}
 
     alternativas: set[str] = set()
-    for persona in personas:
-        libres = horarios_libres(fecha, persona.email, persona.hora_inicio, persona.hora_fin)
-        # ponytail: horarios_libres() consulta el Calendar real vía freebusy, que no
-        # lanza error ni refleja huecos si el service account no tiene acceso al
-        # calendario (ver crear_evento_calendar) — _CITAS_DB es la fuente de verdad
-        # de respaldo para no doble-agendar aunque el Calendar esté mal configurado.
-        ocupadas_local = {c["hora"] for c in _CITAS_DB if c["atendido_email"] == persona.email and c["fecha"] == fecha}
-        libres = [h for h in libres if h not in ocupadas_local]
-        alternativas.update(libres)
-        if hora in libres:
-            cita_id = str(uuid.uuid4())[:8]
-            cita = {
-                "cita_id": cita_id, "nombre": nombre, "telefono": telefono,
-                "motivo": motivo, "fecha": fecha, "hora": hora,
-                "area": area, "atendido_por": persona.nombre, "atendido_email": persona.email,
-            }
-            _CITAS_DB.append(cita)
-            try:
-                evento = crear_evento_calendar(nombre, telefono, motivo, fecha, hora, persona.email)
-                cita["calendar_link"] = evento.get("htmlLink")
-            except Exception as e:
-                # ponytail: nunca dejar esto en silencio — sin log, una cita "exitosa" para
-                # el cliente puede no existir realmente en el calendario del agente.
-                logger.exception("crear_evento_calendar falló para cita_id=%s email=%s", cita_id, persona.email)
-                cita["calendar_error"] = str(e)
-            try:
-                reunion = espocrm.crear_reunion(nombre, telefono, motivo, fecha, hora)
-                cita["crm_meeting_id"] = reunion.get("id")
-            except httpx.HTTPError as e:
-                cita["crm_meeting_error"] = str(e)
-            return cita
+    # ponytail: lock evita que dos peticiones concurrentes (ahora posibles gracias al
+    # to_thread en brain.py) vean el mismo cupo "libre" y lo agenden por duplicado.
+    with _CITAS_LOCK:
+        # ponytail: idempotencia — si el LLM vuelve a llamar agendar_cita para el mismo
+        # teléfono/fecha/hora (p.ej. reinterpreta el contexto en un turno posterior),
+        # devuelve la cita ya existente en vez de crear un duplicado.
+        existente = next(
+            (c for c in _CITAS_DB if c["telefono"] == telefono and c["fecha"] == fecha and c["hora"] == hora),
+            None,
+        )
+        if existente:
+            return existente
+
+        for persona in personas:
+            libres = horarios_libres(fecha, persona.email, persona.hora_inicio, persona.hora_fin)
+            # ponytail: horarios_libres() consulta el Calendar real vía freebusy, que no
+            # lanza error ni refleja huecos si el service account no tiene acceso al
+            # calendario (ver crear_evento_calendar) — _CITAS_DB es la fuente de verdad
+            # de respaldo para no doble-agendar aunque el Calendar esté mal configurado.
+            ocupadas_local = {c["hora"] for c in _CITAS_DB if c["atendido_email"] == persona.email and c["fecha"] == fecha}
+            libres = [h for h in libres if h not in ocupadas_local]
+            alternativas.update(libres)
+            if hora in libres:
+                cita_id = str(uuid.uuid4())[:8]
+                cita = {
+                    "cita_id": cita_id, "nombre": nombre, "telefono": telefono,
+                    "motivo": motivo, "fecha": fecha, "hora": hora,
+                    "area": area, "atendido_por": persona.nombre, "atendido_email": persona.email,
+                }
+                _CITAS_DB.append(cita)
+                try:
+                    evento = crear_evento_calendar(nombre, telefono, motivo, fecha, hora, persona.email)
+                    cita["calendar_link"] = evento.get("htmlLink")
+                except Exception as e:
+                    # ponytail: nunca dejar esto en silencio — sin log, una cita "exitosa" para
+                    # el cliente puede no existir realmente en el calendario del agente.
+                    logger.exception("crear_evento_calendar falló para cita_id=%s email=%s", cita_id, persona.email)
+                    cita["calendar_error"] = str(e)
+                try:
+                    reunion = espocrm.crear_reunion(nombre, telefono, motivo, fecha, hora)
+                    cita["crm_meeting_id"] = reunion.get("id")
+                except httpx.HTTPError as e:
+                    cita["crm_meeting_error"] = str(e)
+                return cita
 
     libres = sorted(alternativas)
     return {
