@@ -130,7 +130,10 @@ async def generar_respuesta(telefono: str, texto_usuario: str, historial: list[d
                     tools=_tools_para(telefono),
                 ),
             )
-            respuesta = chat.send_message(texto_usuario)
+            # ponytail: send_message es sync y ejecuta el function-calling automático
+            # (incluye las tools de agent/tools.py, todas sync) dentro de su propia
+            # llamada — a to_thread para no bloquear el event loop de Uvicorn.
+            respuesta = await asyncio.to_thread(chat.send_message, texto_usuario)
             texto = respuesta.text
             break
         except errors.ClientError as e:
