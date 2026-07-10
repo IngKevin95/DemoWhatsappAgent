@@ -177,10 +177,10 @@ async def correr_caso(client: httpx.AsyncClient, base_url: str, caso: dict, tele
             session.commit()
         await limpiar_historial(tel_previo)
         await enviar_webhook(client, base_url, tel_previo, previo["usuario"])
-        await asyncio.sleep(4)
+        await asyncio.sleep(7)
 
     for turno in caso["turnos"]:
-        await asyncio.sleep(4)  # ponytail: evita saturar la cuota gratuita de Gemini (15 req/min)
+        await asyncio.sleep(7)  # ponytail: evita saturar la cuota gratuita de Gemini (15 req/min); no afecta latencia real del bot, solo el runner de tests
         estado = await enviar_webhook(client, base_url, telefono, turno["usuario"])
         if estado.get("status") != "ok":
             errores.append(f"webhook devolvió status={estado.get('status')} en vez de 'ok'")
@@ -239,7 +239,7 @@ async def main():
         resultados = []
         for caso in casos:
             if resultados:
-                await asyncio.sleep(4)  # ponytail: gap entre casos, mismo motivo que entre turnos
+                await asyncio.sleep(7)  # ponytail: gap entre casos, mismo motivo que entre turnos
             telefono = args.telefono_real or telefono_para(caso["id"])
             print(f"[{caso['id']}] {caso['descripcion']}  (tel={telefono})")
             ok, errores = await correr_caso(client, args.base_url, caso, telefono)
