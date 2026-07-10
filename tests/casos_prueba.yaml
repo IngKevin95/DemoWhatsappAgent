@@ -99,26 +99,57 @@
 
 - id: 13_crear_ticket_soporte
   categoria: soporte
-  descripcion: Reportar un problema técnico concreto; debe generar ticket con ID.
+  descripcion: Reportar un problema técnico concreto con cédula con soporte activo; debe generar ticket.
   turnos:
-    - usuario: "Tengo un problema, el módulo de facturación no me deja generar facturas electrónicas desde ayer."
+    - usuario: "Tengo un problema, el módulo de facturación no me deja generar facturas electrónicas desde ayer, mi cédula es 900111222."
   side_effects:
     - tipo: ticket_creado
       modulo_contiene: "facturaci"
 
 - id: 14_consultar_ticket_valido
   categoria: soporte
-  descripcion: Crea un ticket y luego pregunta por su estado usando el ID devuelto.
+  descripcion: Crea un ticket (cédula con soporte activo) y luego pregunta por su estado.
   turnos:
-    - usuario: "Se me cayó el módulo de nómina, no carga la planilla, repórtenlo por favor."
+    - usuario: "Se me cayó el módulo de nómina, no carga la planilla, repórtenlo por favor, mi cédula es 900111222."
     - usuario: "¿Cuál es el estado de mi ticket?"
+
+- id: 13b_soporte_sin_licencia
+  categoria: soporte
+  descripcion: >
+    Identificación sin ninguna licencia (900555666): el bot no debe crear
+    ticket, debe redirigir a comercial.
+  turnos:
+    - usuario: "Tengo un problema con el módulo de inventario, no guarda los cambios, mi cédula es 900555666."
+      espera_keywords: ["comercial|no (contamos|tenemos)|licencia|adquir"]
+  side_effects: []
+
+- id: 13c_soporte_licencia_sin_contrato
+  categoria: soporte
+  descripcion: >
+    Identificación con licencia pero sin contrato de soporte activo
+    (900333444): el bot debe ofrecer contratar soporte, no crear ticket.
+  turnos:
+    - usuario: "El módulo de nómina me está fallando, mi cédula es 900333444."
+      espera_keywords: ["contrat|soporte activo|no (cuenta|cuentas|tiene)"]
+  side_effects: []
+
+- id: 13d_soporte_licencia_con_contrato
+  categoria: soporte
+  descripcion: >
+    Identificación con licencia y soporte activo (900111222): debe proceder
+    normal y crear ticket.
+  turnos:
+    - usuario: "El módulo de inventario no sincroniza los productos, mi cédula es 900111222."
+  side_effects:
+    - tipo: ticket_creado
+      modulo_contiene: "inventario"
 
 - id: 15_consultar_ticket_inexistente
   categoria: soporte
   descripcion: Preguntar por un ticket con ID inventado.
   turnos:
     - usuario: "¿Cómo va el ticket TCK-0000?"
-      espera_keywords: ["no (he )?(podido )?encontr|no existe|no tenemos registro"]
+      espera_keywords: ["no (he |pude |pudimos )?(podido )?encontr|no existe|no tenemos registro"]
 
 - id: 16_escalar_a_humano
   categoria: escalamiento
@@ -181,7 +212,7 @@
   categoria: complejo
   descripcion: Ticket de soporte que no se resuelve y termina en escalamiento a humano.
   turnos:
-    - usuario: "El módulo de contabilidad me está duplicando los asientos contables, es grave."
+    - usuario: "El módulo de contabilidad me está duplicando los asientos contables, es grave, mi cédula es 900111222."
     - usuario: "Ya intenté reiniciar sesión y sigue igual, necesito que alguien me llame ya."
       espera_keywords: ["asesor|humano|caso|te (va a )?atender|en breve|momento"]
   side_effects:
@@ -202,7 +233,7 @@
   turnos:
     - usuario: "¿Cuánto cuesta el módulo de inventario?"
     - usuario: "Olvida eso, mejor dime el horario de atención."
-    - usuario: "En realidad quiero reportar una falla en facturación."
+    - usuario: "En realidad quiero reportar una falla en facturación, mi cédula es 900111222."
   side_effects:
     - tipo: ticket_creado
       modulo_contiene: "facturaci"

@@ -47,6 +47,13 @@ def consultar_lead(telefono: str) -> dict | None:
     return lista[0] if lista else None
 
 
+def consultar_casos_por_telefono(telefono: str) -> list[dict]:
+    params = {"where[0][type]": "contains", "where[0][attribute]": "name", "where[0][value]": telefono}
+    r = httpx.get(f"{BASE_URL}/api/v1/Case", params=params, headers=_headers(), timeout=TIMEOUT)
+    r.raise_for_status()
+    return r.json().get("list", [])
+
+
 def crear_caso(telefono: str, descripcion: str, modulo: str) -> dict:
     body = {
         "name": f"Soporte {modulo} - {telefono}",
@@ -63,6 +70,14 @@ def consultar_caso(caso_id: str) -> dict:
     r = httpx.get(f"{BASE_URL}/api/v1/Case/{caso_id}", headers=_headers(), timeout=TIMEOUT)
     r.raise_for_status()
     return r.json()
+
+
+def consultar_reunion(telefono: str) -> dict | None:
+    params = {"where[0][type]": "contains", "where[0][attribute]": "description", "where[0][value]": telefono}
+    r = httpx.get(f"{BASE_URL}/api/v1/Meeting", params=params, headers=_headers(), timeout=TIMEOUT)
+    r.raise_for_status()
+    lista = r.json().get("list", [])
+    return lista[0] if lista else None
 
 
 def crear_reunion(nombre: str, telefono: str, motivo: str, fecha: str, hora: str, duracion_min: int = 30) -> dict:

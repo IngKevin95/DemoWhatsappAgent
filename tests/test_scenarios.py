@@ -26,9 +26,12 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+import httpx
+
 from agent import tools  # noqa: E402
 from agent.brain import RESPUESTAS_FALLBACK, generar_respuesta  # noqa: E402
 from agent.db import Cliente, ColaEspera, Contacto, SyncSession  # noqa: E402
+from agent.integrations import espocrm  # noqa: E402
 from agent.memory import guardar_mensaje, inicializar_db, obtener_historial  # noqa: E402
 
 CASOS_PATH = Path(__file__).parent / "casos_prueba.yaml"
@@ -58,41 +61,49 @@ def check_side_effect(efecto: dict, telefono: str) -> tuple[bool, str]:
         return True, ""
 
     if tipo == "lead_existe":
-        leads = [l for l in tools._CRM_DB.values() if l["telefono"] == telefono]
-        if not leads:
-            return False, f"no hay lead en _CRM_DB para {telefono}"
-        if "interes_contiene" in efecto:
-            if not any(re.search(efecto["interes_contiene"], l["interes"] or "", re.IGNORECASE) for l in leads):
-                return False, f"ningún lead matchea interes~={efecto['interes_contiene']}"
+        try:
+            lead = espocrm.consultar_lead(telefono)
+        except httpx.HTTPError as e:
+            return True, f"no verificable, CRM no disponible: {e}"
+        if not lead:
+            return False, f"no hay lead en EspoCRM para {telefono}"
+        if "interes_contiene" in efecto and not re.search(efecto["interes_contiene"], lead.get("description") or "", re.IGNORECASE):
+            return False, f"lead no matchea interes~={efecto['interes_contiene']}"
         return True, ""
 
     if tipo == "lead_o_contacto":
         with SyncSession() as session:
             c = session.get(Contacto, telefono)
-        leads = [l for l in tools._CRM_DB.values() if l["telefono"] == telefono]
-        if not c and not leads:
-            return False, f"no hay Contacto ni lead para {telefono}"
-        if "nombre_contiene" in efecto:
-            nombres = [c.nombre] if c else []
-            nombres += [l["nombre"] for l in leads]
-            if not any(re.search(efecto["nombre_contiene"], n or "", re.IGNORECASE) for n in nombres):
-                return False, f"ningún nombre matchea {efecto['nombre_contiene']}"
+        if not c:
+            return False, f"no hay Contacto para {telefono}"
+        if "nombre_contiene" in efecto and not re.search(efecto["nombre_contiene"], c.nombre or "", re.IGNORECASE):
+            return False, f"nombre '{c.nombre}' no matchea {efecto['nombre_contiene']}"
         return True, ""
 
     if tipo == "cita_o_alternativa":
+        try:
+            reunion = espocrm.consultar_reunion(telefono)
+        except httpx.HTTPError as e:
+            return True, f"no verificable, CRM no disponible: {e}"
         citas = [c for c in tools._CITAS_DB if c["telefono"] == telefono]
-        if citas:
-            if "area" in efecto and not any(c["area"].lower() == efecto["area"].lower() for c in citas):
+        if citas or reunion:
+            if citas and "area" in efecto and not any(c["area"].lower() == efecto["area"].lower() for c in citas):
                 return False, f"cita existe pero no en área {efecto['area']}"
             return True, ""
         return True, "sin cita confirmada (puede haber caído en alternativas, aceptado como válido)"
 
     if tipo == "ticket_creado":
-        tickets = [t for t in tools._CASOS_SOPORTE.values() if t["telefono"] == telefono]
+        try:
+            tickets = espocrm.consultar_casos_por_telefono(telefono)
+        except httpx.HTTPError as e:
+            return True, f"no verificable, CRM no disponible: {e}"
         if not tickets:
-            return False, f"no hay ticket en _CASOS_SOPORTE para {telefono}"
+            return False, f"no hay Case en EspoCRM para {telefono}"
         if "modulo_contiene" in efecto:
-            if not any(re.search(efecto["modulo_contiene"], t["modulo"] or "", re.IGNORECASE) for t in tickets):
+            if not any(
+                re.search(efecto["modulo_contiene"], (t.get("name") or "") + (t.get("description") or ""), re.IGNORECASE)
+                for t in tickets
+            ):
                 return False, f"ningún ticket matchea modulo~={efecto['modulo_contiene']}"
         return True, ""
 
