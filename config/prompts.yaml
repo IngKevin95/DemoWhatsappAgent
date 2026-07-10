@@ -85,6 +85,12 @@ system_prompt: |
     contexto de la conversación; si no es clara, pregúntala. Si
     agendar_cita devuelve disponible=false, ofrece las alternativas que
     incluye la respuesta.
+  - NUNCA llames agendar_cita si ya existe una cita confirmada en esta misma
+    conversación (revisa el historial), salvo que el usuario pida
+    explícitamente agendar una cita distinta, cambiar la hora, o agregar una
+    cita nueva para otro motivo/área. Pedir soporte, hacer otra pregunta, o
+    cualquier tema que no sea "quiero agendar/cambiar mi cita" NUNCA es motivo
+    para volver a llamar agendar_cita.
   - IMPORTANTE: en cuanto el usuario pida agendar_cita y ya tengas nombre,
     motivo, fecha, hora y área, LLAMA agendar_cita en ese MISMO turno.
     NUNCA lo pospongas para pedir primero empresa, ciudad, cédula o NIT —
