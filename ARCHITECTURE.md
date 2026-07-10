@@ -35,11 +35,43 @@ como proceso nativo en el host. Detalle en la sección de túnel más abajo.
 
 ### Qué es simulado / no persistente (demo-only)
 
-`agent/tools.py`: CRM (`_CRM_DB`), citas internas (`_CITAS_DB`) y tickets de
-soporte (`_CASOS_SOPORTE`) son **dicts en memoria del proceso** — se
-resetean en cada restart del contenedor `sysbot`. Solo `modulos`, `ofertas`,
-`parametros` y `mensajes` son persistentes (Postgres). Calendar y correo sí
-son reales/externos (Google), no simulados.
+`agent/tools.py`: citas internas (`_CITAS_DB`) son un **dict en memoria del
+proceso** — se resetea en cada restart del contenedor `sysbot`. CRM
+(leads/casos) y licencias/soporte ya no viven en memoria: usan EspoCRM y
+Firebird respectivamente (ver sección siguiente), persistentes pero en
+infra de demo separada. Solo `modulos`, `ofertas`, `parametros` y
+`mensajes` son persistentes en el Postgres de producción. Calendar y correo
+sí son reales/externos (Google), no simulados.
+
+## Infraestructura de demo (aparte)
+
+Para demostrar validación de licencias/soporte y CRM a usuarios
+funcionales, sin mezclar con producción, hay un **segundo compose**:
+`docker-compose.demo.yml`. Se levanta junto al compose actual (no lo
+reemplaza), conectado por una red Docker externa compartida.
+
+| Servicio | Imagen/build | Rol |
+|---|---|---|
+| `firebird` | `jacobalberty/firebird:3.0-sc` | BD de licencias (`licencias.fdb`, tabla `LICENCIAS`) — cubre los 3 escenarios de soporte (con licencia+soporte, con licencia sin soporte, sin licencia). |
+| `seed-firebird` | `build: .`, corre una vez | Siembra 3 identificaciones fijas (ver `scripts/seed_firebird.py`) de forma idempotente. |
+| `postgres-demo` | `postgres:16` | BD propia y aislada solo para EspoCRM — no comparte instancia/credenciales con el `postgres` de producción. |
+| `espocrm` | `espocrm/espocrm:latest` | CRM open source con módulos Lead/Case nativos vía API REST. Puerto host `8081`. |
+
+Puente entre los dos compose: red Docker externa **`sysplus-demo`**
+(`docker network create sysplus-demo`, una sola vez, antes del primer
+`up`), declarada `external: true` en ambos archivos. El servicio `sysbot`
+(compose actual) se une también a esta red y le habla a `firebird`/
+`espocrm` por nombre de servicio — sin `depends_on` cruzado entre
+proyectos Compose (no lo soporta), así que `docker-compose.demo.yml` se
+levanta antes o en paralelo, nunca después de que `sysbot` ya esté
+respondiendo tráfico crítico.
+
+`agent/tools.py::consultar_licencia` y las tools de CRM
+(`registrar_lead_crm`, `consultar_estado_cliente`, `crear_ticket_soporte`,
+`consultar_ticket_soporte`) degradan con gracia (devuelven
+`sin_licencia`/`error` en vez de crashear) si esta infra de demo no está
+levantada — el compose de producción sigue funcionando solo, sin estas
+capacidades.
 
 ## Alternativas de producción
 
