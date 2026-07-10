@@ -306,6 +306,10 @@ def crear_ticket_soporte(telefono: str, descripcion: str, modulo: str) -> dict:
 def consultar_ticket_soporte(ticket_id: str) -> dict:
     try:
         return espocrm.consultar_caso(ticket_id)
+    except httpx.HTTPStatusError as e:
+        if e.response.status_code == 404:
+            return {"error": "no encontrado", "mensaje": f"No existe ningún ticket con ID {ticket_id}."}
+        return {"error": f"CRM no disponible: {e}"}
     except httpx.HTTPError as e:
         return {"error": f"CRM no disponible: {e}"}
 
