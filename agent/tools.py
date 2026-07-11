@@ -124,12 +124,28 @@ def consultar_parametro(clave: str) -> dict:
         return {"clave": param.clave, "valor": param.valor}
 
 
-def registrar_lead_crm(nombre: str, telefono: str, empresa: str, interes: str) -> dict:
+def registrar_lead_crm(
+    nombre: str,
+    telefono: str,
+    empresa: str,
+    interes: str,
+    sector: str | None = None,
+    actividad: str | None = None,
+    empleados: str | None = None,
+) -> dict:
     try:
         lead = espocrm.crear_lead(nombre, telefono, empresa, "", interes)
-        return {"lead_id": lead.get("id"), "estado": "registrado"}
+        resultado = {"lead_id": lead.get("id"), "estado": "registrado"}
     except httpx.HTTPError as e:
-        return {"estado": "error", "mensaje": f"CRM no disponible: {e}"}
+        resultado = {"estado": "error", "mensaje": f"CRM no disponible: {e}"}
+    with SyncSession() as session:
+        _upsert_cliente(
+            session, telefono, tipo="lead",
+            nombre_empresa=empresa, sector_empresa=sector,
+            actividad_empresa=actividad, empleados_empresa=empleados,
+        )
+        session.commit()
+    return resultado
 
 
 def consultar_estado_cliente(telefono: str) -> dict:
@@ -204,6 +220,24 @@ def _upsert_contacto(session, telefono: str, nombre: str) -> Contacto:
     else:
         contacto.nombre = nombre
     return contacto
+
+
+def _upsert_cliente(session, telefono: str, tipo: str, **campos) -> Cliente | dict:
+    """Crea/actualiza la fila de clientes (lead o cliente) para un contacto ya existente.
+    Solo pisa campos no-None; nunca degrada tipo de 'cliente' a 'lead'."""
+    contacto = session.get(Contacto, telefono)
+    if not contacto:
+        return {"error": f"No hay contacto registrado con el teléfono {telefono}."}
+    cliente = session.get(Cliente, telefono)
+    if not cliente:
+        cliente = Cliente(telefono=telefono, tipo=tipo)
+        session.add(cliente)
+    elif cliente.tipo != "cliente":
+        cliente.tipo = tipo
+    for campo, valor in campos.items():
+        if valor is not None:
+            setattr(cliente, campo, valor)
+    return cliente
 
 
 def guardar_datos_contacto(
@@ -467,21 +501,26 @@ def promover_colas() -> list[dict]:
     return promovidos
 
 
-def registrar_cliente(telefono: str, numero_identificacion: str | None = None, nit_empresa: str | None = None) -> dict:
+def registrar_cliente(
+    telefono: str,
+    numero_identificacion: str | None = None,
+    nit_empresa: str | None = None,
+    nombre_empresa: str | None = None,
+    sector: str | None = None,
+    actividad: str | None = None,
+    empleados: str | None = None,
+) -> dict:
     """Marca un contacto existente como cliente confirmado, guardando su identificación
     (y la de su empresa, si aplica). Requiere que el contacto ya exista (se crea al
     escalar o al registrar_lead_crm)."""
     with SyncSession() as session:
-        contacto = session.get(Contacto, telefono)
-        if not contacto:
-            return {"error": f"No hay contacto registrado con el teléfono {telefono}."}
-        cliente = session.get(Cliente, telefono)
-        if not cliente:
-            cliente = Cliente(telefono=telefono)
-            session.add(cliente)
-        if numero_identificacion is not None:
-            cliente.numero_identificacion = numero_identificacion
-        if nit_empresa is not None:
-            cliente.nit_empresa = nit_empresa
+        cliente = _upsert_cliente(
+            session, telefono, tipo="cliente",
+            numero_identificacion=numero_identificacion, nit_empresa=nit_empresa,
+            nombre_empresa=nombre_empresa, sector_empresa=sector,
+            actividad_empresa=actividad, empleados_empresa=empleados,
+        )
+        if isinstance(cliente, dict):
+            return cliente
         session.commit()
         return {"telefono": telefono, "estado": "cliente_registrado"}
