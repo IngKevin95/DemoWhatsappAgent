@@ -17,9 +17,16 @@ logger = logging.getLogger(__name__)
 # basta (inspect.signature sigue mostrando el parámetro), así que se envuelven a
 # mano sin `telefono` en la firma expuesta al LLM.
 def _tools_con_telefono(telefono: str) -> list:
-    def registrar_lead_crm(nombre: str, empresa: str, interes: str) -> dict:
-        """Registra un lead comercial en el CRM."""
-        return tools.registrar_lead_crm(nombre, telefono, empresa, interes)
+    def registrar_lead_crm(
+        nombre: str,
+        empresa: str,
+        interes: str,
+        sector: str | None = None,
+        actividad: str | None = None,
+        empleados: str | None = None,
+    ) -> dict:
+        """Registra un lead comercial en el CRM, junto con el perfil de su empresa."""
+        return tools.registrar_lead_crm(nombre, telefono, empresa, interes, sector, actividad, empleados)
 
     def consultar_estado_cliente() -> dict:
         """Consulta el estado del lead/cliente en el CRM para el remitente actual."""
@@ -48,10 +55,19 @@ def _tools_con_telefono(telefono: str) -> list:
         """Escala la conversación a un agente humano del área dada."""
         return tools.escalar_a_humano(telefono, nombre, resumen_caso, area)
 
-    def registrar_cliente(numero_identificacion: str | None = None, nit_empresa: str | None = None) -> dict:
+    def registrar_cliente(
+        numero_identificacion: str | None = None,
+        nit_empresa: str | None = None,
+        nombre_empresa: str | None = None,
+        sector: str | None = None,
+        actividad: str | None = None,
+        empleados: str | None = None,
+    ) -> dict:
         """Marca al remitente actual como cliente confirmado, guardando su identificación
-        (y la de su empresa, si aplica). Requiere que el contacto ya exista."""
-        return tools.registrar_cliente(telefono, numero_identificacion, nit_empresa)
+        (y el perfil de su empresa, si aplica). Requiere que el contacto ya exista."""
+        return tools.registrar_cliente(
+            telefono, numero_identificacion, nit_empresa, nombre_empresa, sector, actividad, empleados
+        )
 
     return [
         registrar_lead_crm,

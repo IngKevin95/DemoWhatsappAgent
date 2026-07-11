@@ -114,6 +114,11 @@ CREATE TABLE public.clientes (
     telefono character varying NOT NULL,
     numero_identificacion character varying,
     nit_empresa character varying,
+    tipo character varying NOT NULL DEFAULT 'lead',
+    nombre_empresa character varying,
+    sector_empresa character varying,
+    actividad_empresa character varying,
+    empleados_empresa character varying,
     creado_en timestamp without time zone DEFAULT now(),
     actualizado_en timestamp without time zone DEFAULT now()
 );
