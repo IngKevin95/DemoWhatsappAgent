@@ -31,7 +31,10 @@ def get_gmail_service():
     return build("gmail", "v1", credentials=_credentials())
 
 
-def crear_evento_calendar(nombre: str, telefono: str, motivo: str, fecha: str, hora: str, calendar_id: str = CALENDAR_ID) -> dict:
+def crear_evento_calendar(
+    nombre: str, telefono: str, motivo: str, fecha: str, hora: str,
+    calendar_id: str = CALENDAR_ID, correo_cliente: str | None = None,
+) -> dict:
     inicio_dt = datetime.strptime(f"{fecha} {hora}", "%Y-%m-%d %H:%M")
     fin_dt = inicio_dt + timedelta(hours=1)
     evento = {
@@ -40,7 +43,13 @@ def crear_evento_calendar(nombre: str, telefono: str, motivo: str, fecha: str, h
         "start": {"dateTime": inicio_dt.isoformat(), "timeZone": "America/Bogota"},
         "end": {"dateTime": fin_dt.isoformat(), "timeZone": "America/Bogota"},
     }
-    return get_calendar_service().events().insert(calendarId=calendar_id, body=evento).execute()
+    send_updates = "none"
+    if correo_cliente:
+        evento["attendees"] = [{"email": correo_cliente}]
+        send_updates = "all"
+    return get_calendar_service().events().insert(
+        calendarId=calendar_id, body=evento, sendUpdates=send_updates
+    ).execute()
 
 
 def horarios_libres(fecha: str, calendar_id: str = CALENDAR_ID, hora_inicio: str = "09:00", hora_fin: str = "18:00") -> list[str]:

@@ -269,6 +269,8 @@ def agendar_cita(nombre: str, telefono: str, motivo: str, fecha: str, hora: str,
     alternativas libres ese mismo día (unión de todas las personas del área)."""
     with SyncSession() as session:
         personas = _agentes_por_area(session, area)
+        contacto = session.get(Contacto, telefono)
+        correo_cliente = contacto.correo if contacto else None
     if not personas:
         return {"disponible": False, "mensaje": f"No hay nadie configurado para el área '{area}'."}
 
@@ -304,13 +306,25 @@ def agendar_cita(nombre: str, telefono: str, motivo: str, fecha: str, hora: str,
                 }
                 _CITAS_DB.append(cita)
                 try:
-                    evento = crear_evento_calendar(nombre, telefono, motivo, fecha, hora, persona.email)
+                    evento = crear_evento_calendar(nombre, telefono, motivo, fecha, hora, persona.email, correo_cliente)
                     cita["calendar_link"] = evento.get("htmlLink")
                 except Exception as e:
                     # ponytail: nunca dejar esto en silencio — sin log, una cita "exitosa" para
                     # el cliente puede no existir realmente en el calendario del agente.
                     logger.exception("crear_evento_calendar falló para cita_id=%s email=%s", cita_id, persona.email)
                     cita["calendar_error"] = str(e)
+                if correo_cliente:
+                    try:
+                        enviar_email(
+                            correo_cliente,
+                            f"Confirmación de cita SysPlus - {fecha} {hora}",
+                            f"Hola {nombre},\n\nTu cita quedó registrada:\nMotivo: {motivo}\n"
+                            f"Fecha: {fecha}\nHora: {hora}\nTe atenderá: {persona.nombre} ({area}).\n\nSaludos, SysPlus.",
+                        )
+                        cita["email_enviado"] = True
+                    except Exception as e:
+                        logger.exception("enviar_email falló para cita_id=%s correo=%s", cita_id, correo_cliente)
+                        cita["email_error"] = str(e)
                 try:
                     reunion = espocrm.crear_reunion(nombre, telefono, motivo, fecha, hora)
                     cita["crm_meeting_id"] = reunion.get("id")
