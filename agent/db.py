@@ -105,6 +105,11 @@ class Cliente(Auditoria, Base):
     telefono = Column(String, ForeignKey("contactos.telefono"), primary_key=True)
     numero_identificacion = Column(String, nullable=True)  # cédula/NIT de la persona
     nit_empresa = Column(String, nullable=True)  # solo si además tiene empresa
+    tipo = Column(String, nullable=False, default="lead")  # 'lead' o 'cliente'
+    nombre_empresa = Column(String, nullable=True)
+    sector_empresa = Column(String, nullable=True)
+    actividad_empresa = Column(String, nullable=True)  # a qué se dedica
+    empleados_empresa = Column(String, nullable=True)  # texto libre: "10-50", "aprox 20"
 
 
 class ColaEspera(Auditoria, Base):
