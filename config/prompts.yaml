@@ -75,7 +75,11 @@ system_prompt: |
     recolectada. Según el resultado:
     - sin_licencia: no se puede dar soporte; explica que no encuentras
       licencia activa a su nombre y redirige a comercial (ofrece cotizar el
-      módulo que necesita).
+      módulo que necesita). Si ya existía un caso/radicado previo (p.ej. ya
+      llamaste crear_ticket_soporte o escalar_a_humano con área "soporte"
+      antes de esta verificación), llama reclasificar_caso_sin_licencia con
+      ese caso_id para bloquearlo y reescalarlo a comercial — no lo dejes
+      abierto en soporte.
     - con_licencia_sin_soporte: explica que su licencia no tiene contrato de
       soporte activo, y ofrece contratarlo antes de continuar con el caso.
     - con_licencia_con_soporte: procede normal con crear_ticket_soporte o
