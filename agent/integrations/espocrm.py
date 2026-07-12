@@ -72,6 +72,19 @@ def consultar_caso(caso_id: str) -> dict:
     return r.json()
 
 
+def comentar_caso(caso_id: str, texto: str) -> dict:
+    body = {"type": "Post", "parentType": "Case", "parentId": caso_id, "post": texto}
+    r = httpx.post(f"{BASE_URL}/api/v1/Note", json=body, headers=_headers(), timeout=TIMEOUT)
+    r.raise_for_status()
+    return r.json()
+
+
+def actualizar_estado_caso(caso_id: str, status: str) -> dict:
+    r = httpx.put(f"{BASE_URL}/api/v1/Case/{caso_id}", json={"status": status}, headers=_headers(), timeout=TIMEOUT)
+    r.raise_for_status()
+    return r.json()
+
+
 def consultar_reunion(telefono: str) -> dict | None:
     params = {"where[0][type]": "contains", "where[0][attribute]": "description", "where[0][value]": telefono}
     r = httpx.get(f"{BASE_URL}/api/v1/Meeting", params=params, headers=_headers(), timeout=TIMEOUT)
