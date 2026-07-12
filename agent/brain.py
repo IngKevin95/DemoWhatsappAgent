@@ -55,6 +55,12 @@ def _tools_con_telefono(telefono: str) -> list:
         """Escala la conversación a un agente humano del área dada."""
         return tools.escalar_a_humano(telefono, nombre, resumen_caso, area)
 
+    def reclasificar_caso_sin_licencia(caso_id: str, nombre: str) -> dict:
+        """Si ya existía un radicado de soporte (caso_id tipo ESC-123) y luego
+        consultar_licencia devuelve sin_licencia: comenta y bloquea ese caso en el CRM,
+        y lo reescala a comercial."""
+        return tools.reclasificar_caso_sin_licencia(caso_id, telefono, nombre)
+
     def registrar_cliente(
         numero_identificacion: str | None = None,
         nit_empresa: str | None = None,
@@ -76,6 +82,7 @@ def _tools_con_telefono(telefono: str) -> list:
         agendar_cita,
         crear_ticket_soporte,
         escalar_a_humano,
+        reclasificar_caso_sin_licencia,
         registrar_cliente,
     ]
 
