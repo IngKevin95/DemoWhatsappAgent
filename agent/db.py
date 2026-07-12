@@ -112,6 +112,24 @@ class Cliente(Auditoria, Base):
     empleados_empresa = Column(String, nullable=True)  # texto libre: "10-50", "aprox 20"
 
 
+class Radicado(Auditoria, Base):
+    """Registro persistente de cada escalamiento a humano (radicado ESC-<id>).
+    El id lo asigna el serial de Postgres: es la fuente única del número de
+    radicado, así que no puede colisionar ni duplicarse entre escalamientos
+    concurrentes (a diferencia de un random.randint generado en la app)."""
+    __tablename__ = "radicados"
+
+    id = Column(Integer, primary_key=True)
+    telefono = Column(String, ForeignKey("contactos.telefono"), nullable=False)
+    area_id = Column(Integer, ForeignKey("areas.id"), nullable=False)
+    agente_id = Column(Integer, ForeignKey("agentes.id"), nullable=True)
+    resumen = Column(String, nullable=False)
+    estado = Column(String, nullable=False)  # escalado | en_cola
+    modo = Column(String, nullable=True)  # conectado | notificacion_con_contacto | notificacion
+    email_enviado = Column(Boolean, default=False)
+    crm_case_id = Column(String, nullable=True)
+
+
 class ColaEspera(Auditoria, Base):
     """Contactos esperando a que se libere un agente de su área (todos ocupados).
     telefono es PK+FK a Contacto: la relación misma es la clave.
