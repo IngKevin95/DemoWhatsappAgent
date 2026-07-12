@@ -6,7 +6,6 @@ consultan Firebird directamente. Ambos viven en infra de demo separada
 
 import logging
 import os
-import random
 import threading
 import uuid
 from datetime import date, datetime, timedelta, timezone
@@ -15,7 +14,7 @@ from pathlib import Path
 import firebird.driver as fb
 import httpx
 
-from .db import Agente, Area, Cliente, ColaEspera, Contacto, Modulo, Oferta, Parametro, SyncSession
+from .db import Agente, Area, Cliente, ColaEspera, Contacto, Modulo, Oferta, Parametro, Radicado, SyncSession
 from .integrations import espocrm
 from .integrations.google import crear_evento_calendar, enviar_email, horarios_libres
 
@@ -387,28 +386,75 @@ def crear_tarea(nombre: str, descripcion: str, fecha_vencimiento: str | None = N
         return {"estado": "error", "mensaje": f"CRM no disponible: {e}"}
 
 
+def reclasificar_caso_sin_licencia(caso_id: str, telefono: str, nombre: str) -> dict:
+    """Si ya existía un radicado (ESC-<id>) de soporte y luego se detecta que el contacto
+    NO tiene licencia activa: comenta y bloquea (Rejected) el caso original en EspoCRM,
+    y lo reescala a comercial (nuevo radicado). Llamar apenas consultar_licencia devuelva
+    sin_licencia si ya se había creado un ticket/escalamiento antes de esa verificación."""
+    try:
+        radicado_id = int(caso_id.removeprefix("ESC-"))
+    except ValueError:
+        return {"estado": "error", "mensaje": f"caso_id inválido: {caso_id}"}
+
+    with SyncSession() as session:
+        radicado = session.get(Radicado, radicado_id)
+        if not radicado:
+            return {"estado": "error", "mensaje": f"No existe el radicado {caso_id}."}
+
+        comentario = f"Sin licencia activa para {nombre} ({telefono}); redirigido a comercial."
+        if radicado.crm_case_id:
+            try:
+                espocrm.comentar_caso(radicado.crm_case_id, comentario)
+                espocrm.actualizar_estado_caso(radicado.crm_case_id, "Rejected")
+            except httpx.HTTPError:
+                logger.exception("No se pudo comentar/bloquear caso CRM %s", radicado.crm_case_id)
+
+        radicado.estado = "bloqueado_sin_licencia"
+        session.commit()
+
+    return escalar_a_humano(telefono, nombre, f"Redirigido desde {caso_id}: sin licencia activa.", "comercial")
+
+
 def escalar_a_humano(telefono: str, nombre: str, resumen_caso: str, area: str) -> dict:
     """Escala la conversación a un agente humano del área dada. Busca el primer agente
     del área que NO esté ya conectado con otro cliente. Si es de opción B (mismo
     WhatsApp del bot), lo conecta y el bot se pausa para este cliente. Si es de
     opción A, le notifica el caso por WhatsApp aparte (no se pausa). Si todos los
     agentes del área están ocupados, encola al cliente e informa su posición.
-    Siempre registra el caso por correo a EMAIL_SOPORTE."""
-    caso_id = f"ESC-{random.randint(1000, 9999)}"
-    cuerpo = f"Cliente: {nombre}\nTeléfono: {telefono}\nResumen: {resumen_caso}"
-    try:
-        enviar_email(EMAIL_SOPORTE, f"[{caso_id}] Escalamiento SysBot - {nombre}", cuerpo)
-        email_enviado = True
-    except Exception:
-        email_enviado = False
-
+    Siempre registra el caso por correo a EMAIL_SOPORTE y deja radicado persistido
+    (tabla radicados) y traza en EspoCRM."""
     with SyncSession() as session:
+        _upsert_contacto(session, telefono, nombre)
+        area_row = _get_area(session, area)
+        # ponytail: el id lo pone el serial de Postgres -> único y sin colisión
+        # posible, ni con concurrencia; nada de random.randint + reintentos.
+        radicado = Radicado(
+            telefono=telefono, area_id=area_row.id, resumen=resumen_caso, estado="escalado",
+        )
+        session.add(radicado)
+        session.flush()
+        caso_id = f"ESC-{radicado.id}"
+
+        try:
+            crm_case = espocrm.crear_caso(telefono, f"[{caso_id}] {resumen_caso}", area)
+            radicado.crm_case_id = crm_case.get("id")
+        except httpx.HTTPError:
+            logger.exception("espocrm.crear_caso falló para caso_id=%s", caso_id)
+
+        cuerpo = f"Cliente: {nombre}\nTeléfono: {telefono}\nResumen: {resumen_caso}"
+        try:
+            enviar_email(EMAIL_SOPORTE, f"[{caso_id}] Escalamiento SysBot - {nombre}", cuerpo)
+            radicado.email_enviado = True
+        except Exception:
+            radicado.email_enviado = False
+
         agentes = _agentes_por_area(session, area)
         numero_bot = session.query(Parametro).filter(Parametro.clave == "whatsapp_numero_bot").first()
         if not agentes:
+            session.commit()
             return {
                 "caso_id": caso_id, "estado": "escalado", "modo": None, "atendido_por": None,
-                "email_enviado": email_enviado,
+                "email_enviado": radicado.email_enviado,
                 "mensaje": f"Caso {caso_id} registrado, pero no hay agentes configurados para el área '{area}'.",
             }
 
@@ -416,12 +462,12 @@ def escalar_a_humano(telefono: str, nombre: str, resumen_caso: str, area: str) -
         libres = [a for a in agentes if a.id not in ocupados]
         if libres:
             agente = libres[0]
+            radicado.agente_id = agente.id
             if agente.telefono and numero_bot and agente.telefono == numero_bot.valor:
                 modo = "conectado"
                 contacto = _upsert_contacto(session, telefono, nombre)
                 contacto.atendido_por = agente.id
                 contacto.conectado_en = datetime.now(timezone.utc)
-                session.commit()
                 mensaje = (
                     f"Caso {caso_id} registrado. Un asesor humano de SysPlus dará "
                     f"seguimiento a {nombre} ({telefono}). Resumen: {resumen_caso}"
@@ -449,15 +495,16 @@ def escalar_a_humano(telefono: str, nombre: str, resumen_caso: str, area: str) -
                     f"Caso {caso_id} registrado. Un asesor de SysPlus se comunicará contigo "
                     f"a la brevedad posible. Resumen: {resumen_caso}"
                 )
+            radicado.modo = modo
+            session.commit()
             return {
                 "caso_id": caso_id, "estado": "escalado", "modo": modo, "atendido_por": agente.nombre,
-                "email_enviado": email_enviado,
+                "email_enviado": radicado.email_enviado,
                 "mensaje": mensaje,
             }
 
         # todos ocupados -> cola
-        _upsert_contacto(session, telefono, nombre)
-        area_row = _get_area(session, area)
+        radicado.estado = "en_cola"
         delante = (
             session.query(ColaEspera)
             .filter(ColaEspera.area_id == area_row.id, ColaEspera.hasta.is_(None))
@@ -473,7 +520,7 @@ def escalar_a_humano(telefono: str, nombre: str, resumen_caso: str, area: str) -
         session.commit()
         return {
             "caso_id": caso_id, "estado": "en_cola", "posicion": delante + 1,
-            "email_enviado": email_enviado,
+            "email_enviado": radicado.email_enviado,
             "mensaje": (
                 f"Caso {caso_id} registrado. Todos los agentes de '{area}' están ocupados ahora mismo. "
                 f"Hay {delante} persona(s) delante de ti, en breve te atenderán."
