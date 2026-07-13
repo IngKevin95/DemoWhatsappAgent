@@ -12,30 +12,28 @@ cloudflared.exe
 cloudflared.log
 uvicorn.log
 
+# ── pytest & coverage ──────────────────────────────────────────────────
+.coverage
+.pytest_cache/
+htmlcov/
+*.cover
+.coverage.*
+
+# ── node & npm ─────────────────────────────────────────────────────────
+npm-debug.log*
+
 # ── build-harness (factory-spec-build) — instalación reproducible ─────
 .claude/agents/build/
 .claude/commands/build/
 .claude/commands/opsx/
-.claude/skills/building-a-slice/
-.claude/skills/building-a-micro-change/
-.claude/skills/releasing-a-version/
-.claude/skills/openspec-*/
-.claude/skills/rpa-*.md
+.claude/skills/*
 .claude/config/
 .claude/state/
 .claude/memory/
 .claude/hooks/build/
 .claude/.build-harness-version
 
-# ── plugins MCP de terceros — instalados, no propios del proyecto ─────
-.claude/skills/headroom/
-.claude/skills/code-review-graph/
-.claude/skills/ponytail/
-.claude/skills/prompt-caching-mcp/
-# ── /build-harness y /plugins ──────────────────────
 
-# ── factory-vertical (auto) ───────────────────────────
-.claude/skills/factory/
 .claude/agents/factory/
 .claude/commands/factory/
 .claude/hooks/factory.json
@@ -44,3 +42,8 @@ docs/.reviews/
 docs/.flow-state.json
 docs/.factory-suggestions.md
 # ── /factory-vertical ─────────────────────────────────
+
+node_modules/*
+
+package-lock.json
+package.json
