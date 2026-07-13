@@ -30,6 +30,7 @@
 | **SHOULD** | HU-021 | Comercial notificado de nuevos leads | EP-005 | 2 | draft | 6. Seguimiento |
 | **SHOULD** | HU-024 | Usuario cierra conversación | EP-001 | 1 | draft | 7. Cierre |
 | **SHOULD** | HU-025 | Sistema detecta inactividad | EP-001 | 1 | draft | 7. Cierre |
+| **SHOULD** | HU-025 | Sistema detecta inactividad | EP-001 | 1 | draft | 7. Cierre |
 
 ---
 
@@ -51,7 +52,7 @@
 | 2. Consulta Comercial | HU-004, 005, 006, 007 | ✅ v1.0 |
 | 4. Decisión de Contacto | HU-011a/b, 012, 013, 014 | ✅ v1.0 |
 | 5. Escalación a Humano | HU-015, 019 | ✅ v1.0 |
-| 6. Seguimiento | HU-021, 022 | ✅ v1.0 |
+| 6. Seguimiento | HU-021 | ✅ v1.0 |
 | 7. Cierre de Flujo | HU-024, 025 | ✅ v1.0 |
 
 ---
@@ -84,7 +85,7 @@
 
 ## Notas Finales
 
-- **Backlog Fase 1 Demo:** 17 historias (HU-001 a HU-007, HU-011a/b, HU-012 a HU-015, HU-019, HU-021, HU-022, HU-024, HU-025)
+- **Backlog Fase 1 Demo:** 17 historias (HU-001 a HU-007, HU-011a/b, HU-012 a HU-015, HU-019, HU-021, HU-024, HU-025)
 - **Épicas v1.0:** 3 (EP-001, EP-002, EP-005)
 - **Actividades Completas:** 6 de 7 (excluye búsqueda semántica que es v1.1)
 - **Remediación en curso:** Ampliar AC de error/edge + re-titular roles + declarar dependencias

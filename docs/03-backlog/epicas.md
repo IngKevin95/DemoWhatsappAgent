@@ -31,12 +31,16 @@ Establecer cobertura de tests unitarios + integración en módulos críticos (br
 ### Capabilities Incluidas
 
 - **Nivel 4 (Backend):** Validación interna, testing framework, stubs para integraciones externas
+- **Seguridad Mínima v1.0:**
+  - `main.py::recibir_webhook()`: Rate limiting básico (10 req/min por IP)
+  - `main.py` + `brain.py`: Input sanitization (remover scripts, SQL injections)
+  - No exponemos secretos en logs (scrubbing de DATABASE_URL, GOOGLE_*, META_*)
 - **Especialmente:**
   - `brain.py::generar_respuesta()` — tests unitarios (mock Gemini)
   - `tools.py::escalar_a_humano()` — tests de integración (mock EspoCRM + Gmail)
   - `tools.py::agendar_cita()` — tests de integración (mock Google Calendar)
   - `memory.py::obtener_historial()` — tests de persistencia (mock Postgres)
-  - `main.py::recibir_webhook()` — tests de validación de firma Meta (HMAC)
+  - `main.py::recibir_webhook()` — tests de validación de firma Meta (HMAC) + rate limiting
 
 ### Cómo se Mide Éxito
 

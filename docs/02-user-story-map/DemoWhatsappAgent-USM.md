@@ -109,19 +109,11 @@
 **Descripción:** Usuario necesita hablar con un humano (pregunta muy compleja, o bot no puede resolver).  
 **Épica(s) atendida:** EP-001 (tests), EP-002 (error handling), EP-003 (security + audit)
 
-#### Historias (Usuario → Bot)
+#### Historias
 
 | ID | Título | Descripción | Prioridad |
 |----|--------|------------|-----------|
 | HU-015 | Como usuario, quiero contactar directo con el equipo | "Quiero hablar con alguien" → escala a humano | MUST |
-| HU-016 | Como usuario, quiero que mi caso tenga número de ticket | Seguimiento: "¿Cuál es mi caso?" → devuelve ticket ID | SHOULD |
-
-#### Historias (Equipo Soporte → Sistema)
-
-| ID | Título | Descripción | Prioridad |
-|----|--------|------------|-----------|
-| HU-017 | Como Soporte, quiero recibir notificación de escalación | Email con: usuario, qué preguntó, por qué escaló | MUST |
-| HU-018 | Como Soporte, quiero acceder al contexto de la conversación | Historial de chat visible en EspoCRM (caso) | MUST |
 | HU-019 | Como Soporte, quiero trijar si es comercial o técnico | Reclasificar caso (cambiar área responsable) | SHOULD |
 
 #### Criterios de Éxito
@@ -147,18 +139,11 @@
 **Descripción:** Post-cierre de chat: confirmación por email, notificación a comercial, follow-up automático.  
 **Épica(s) atendida:** EP-001 (tests), EP-005 (deploy necesario para 24/7 automation)
 
-#### Historias (Usuario)
-
-| ID | Título | Descripción | Prioridad |
-|----|--------|------------|-----------|
-| HU-020 | Como usuario, quiero confirmación por email de lo acordado | "Tu cita está agendada para..." (resumen) | SHOULD |
-
-#### Historias (Equipo Comercial)
+#### Historias
 
 | ID | Título | Descripción | Prioridad |
 |----|--------|------------|-----------|
 | HU-021 | Como Comercial, quiero ser notificado de nuevos leads | Daily digest: usuarios que consultaron + datos capturados | SHOULD |
-| HU-022 | Como Comercial, quiero saber qué preguntó cada lead | Lead source = "bot", contexto = historial chat | SHOULD |
 
 #### Criterios de Éxito
 
