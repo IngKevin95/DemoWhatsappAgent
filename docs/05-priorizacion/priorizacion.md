@@ -3,7 +3,7 @@
 **Framework:** Valor / Esfuerzo (2×2)  
 **Criterio:** Impacto usuario × Complejidad técnica + riesgo  
 **Fecha:** 2026-07-12  
-**Versión:** 5 (Fase 1 Demo FINAL: 17 HU v1.0 únicamente)
+**Versión:** 6 (Fase 1 Demo + Security + Deployment: 24 HU v1.0 COMPLETO)
 
 ---
 
@@ -27,55 +27,70 @@ BAJO VALOR
 
 ---
 
-## Tabla Ordenada (Valor ÷ Esfuerzo Ratio) — 17 Historias (Fase 1 Demo)
+## Tabla Ordenada (Valor ÷ Esfuerzo Ratio) — 24 Historias (Fase 1 Demo COMPLETO)
 
 | Prioridad | HU | Título | Valor | Esfuerzo | Ratio | Cuadrante | Épica |
 |-----------|----|----|-------|----------|-------|----------|-------|
 | 1️⃣ | HU-004 | Consultar precio | 5 | 1 | 5.0 | Quick Win | EP-001 |
 | 2️⃣ | HU-005 | Qué incluye módulo | 5 | 1 | 5.0 | Quick Win | EP-001 |
-| 3️⃣ | HU-001 | Primer contacto | 5 | 1 | 5.0 | Quick Win | EP-001 |
-| 4️⃣ | HU-024 | Usuario cierra | 4 | 1 | 4.0 | Quick Win | EP-001 |
-| 5️⃣ | HU-012 | Consultar licencia | 5 | 1 | 5.0 | Quick Win | EP-001 |
-| 6️⃣ | HU-014 | Estado de licencia | 4 | 1 | 4.0 | Quick Win | EP-001 |
-| 7️⃣ | HU-025 | Inactividad detector | 4 | 1 | 4.0 | Quick Win | EP-001 |
-| 8️⃣ | HU-006 | Ofertas y promociones | 4 | 1 | 4.0 | Quick Win | EP-001 |
-| 9️⃣ | HU-003 | Disponibilidad 24/7 | 4 | 1 | 4.0 | Quick Win | EP-005 |
-| 🔟 | HU-002 | Intent recognition | 5 | 2 | 2.5 | Strategic | EP-001 |
-| 1️⃣1️⃣ | HU-015 | Escalar a humano (+ ticket + contexto) | 5 | 2 | 2.5 | Strategic | EP-001 |
-| 1️⃣2️⃣ | HU-011a | Agendar cita | 5 | 2 | 2.5 | Strategic | EP-001 |
-| 1️⃣3️⃣ | HU-011b | Notificaciones post-agenda | 4 | 1 | 4.0 | Quick Win | EP-001 |
-| 1️⃣4️⃣ | HU-013 | Registrarse cliente (+ contexto en lead) | 3 | 2 | 1.5 | Fill-in | EP-001 |
-| 1️⃣5️⃣ | HU-019 | Reclasificar caso | 3 | 2 | 1.5 | Fill-in | EP-002 |
-| 1️⃣6️⃣ | HU-021 | Comercial notificado | 3 | 2 | 1.5 | Fill-in | EP-005 |
-| 1️⃣7️⃣ | HU-007 | Comparar módulos | 3 | 2 | 1.5 | Fill-in | EP-001 |
+| 3️⃣ | HU-012 | Consultar licencia | 5 | 1 | 5.0 | Quick Win | EP-001 |
+| 4️⃣ | HU-030 | Rate limiting en webhook | 5 | 1 | 5.0 | Quick Win | EP-003-MINI |
+| 5️⃣ | HU-031 | Input validation & sanitization | 5 | 1 | 5.0 | Quick Win | EP-003-MINI |
+| 6️⃣ | HU-033 | Secrets scrubbing en logs | 5 | 1 | 5.0 | Quick Win | EP-003-MINI |
+| 7️⃣ | HU-001 | Primer contacto | 5 | 1 | 5.0 | Quick Win | EP-001 |
+| 8️⃣ | HU-024 | Usuario cierra | 4 | 1 | 4.0 | Quick Win | EP-001 |
+| 9️⃣ | HU-014 | Estado de licencia | 4 | 1 | 4.0 | Quick Win | EP-001 |
+| 🔟 | HU-025 | Inactividad detector | 4 | 1 | 4.0 | Quick Win | EP-001 |
+| 1️⃣1️⃣ | HU-006 | Ofertas y promociones | 4 | 1 | 4.0 | Quick Win | EP-001 |
+| 1️⃣2️⃣ | HU-011b | Notificaciones post-agenda | 4 | 1 | 4.0 | Quick Win | EP-001 |
+| 1️⃣3️⃣ | HU-003 | Disponibilidad 24/7 | 4 | 1 | 4.0 | Quick Win | EP-005-MINI |
+| 1️⃣4️⃣ | HU-032 | Audit logging en high-stakes tools | 5 | 2 | 2.5 | Strategic | EP-003-MINI |
+| 1️⃣5️⃣ | HU-002 | Intent recognition | 5 | 2 | 2.5 | Fill-in* | EP-001 |
+| 1️⃣6️⃣ | HU-015 | Escalar a humano | 5 | 2 | 2.5 | Fill-in* | EP-001 |
+| 1️⃣7️⃣ | HU-011a | Agendar cita | 5 | 2 | 2.5 | Fill-in* | EP-001 |
+| 1️⃣8️⃣ | HU-026 | Dockerization multi-stage | 3 | 2 | 1.5 | Fill-in | EP-005-MINI |
+| 1️⃣9️⃣ | HU-028 | Health checks & monitoring | 3 | 2 | 1.5 | Fill-in | EP-005-MINI |
+| 2️⃣0️⃣ | HU-013 | Registrarse cliente | 3 | 2 | 1.5 | Fill-in | EP-001 |
+| 2️⃣1️⃣ | HU-019 | Reclasificar caso | 3 | 2 | 1.5 | Fill-in | EP-002 |
+| 2️⃣2️⃣ | HU-021 | Comercial notificado | 3 | 2 | 1.5 | Fill-in | EP-005-MINI |
+| 2️⃣3️⃣ | HU-007 | Comparar módulos | 3 | 2 | 1.5 | Fill-in | EP-001 |
+| 2️⃣4️⃣ | HU-027 | CI/CD pipeline GitHub Actions | 3 | 3 | 1.0 | Time Sink | EP-005-MINI |
 
 ---
 
-## Resumen por Cuadrante (17 HU — Fase 1 Demo SOLO)
+## Resumen por Cuadrante (24 HU — Fase 1 Demo COMPLETO v1.0)
 
 ### 🟢 Quick Wins (Hacer Primero)
-**10 historias** — Alto valor, bajo esfuerzo
+**13 historias** — Alto valor, bajo esfuerzo
 
-Incluye: HU-001, 003, 004, 005, 006, 011b, 012, 014, 024, 025
+Incluye: HU-001, 003, 004, 005, 006, 011b, 012, 014, 024, 025, 030, 031, 033
 
-**Costo:** ~18-20 story points  
-**Beneficio:** Bienvenida, consultas, disponibilidad, cierre
+**Costo:** ~24-26 story points  
+**Beneficio:** Bienvenida, consultas, disponibilidad, cierre, rate limiting, input validation, secrets scrubbing
 
 ### 🔵 Strategic (Hacer Segundo)
-**3 historias** — Alto valor, alto esfuerzo
+**4 historias** — Alto valor, alto esfuerzo
 
-Incluye: HU-002, 011a, 015
-
-**Costo:** ~8-10 story points  
-**Beneficio:** Intent routing + agendar + escalación (cierra Fase 1 Demo)
-
-### 🟡 Fill-ins (Hacer Después si Tiempo)
-**4 historias** — Valor medio, esfuerzo medio
-
-Incluye: HU-007, 013, 019, 021
+Incluye: HU-002, 011a, 015, 032
 
 **Costo:** ~10-12 story points  
-**Beneficio:** Licencias, comparativa, registro, triaje, notificaciones
+**Beneficio:** Intent routing + agendar + escalación + audit logging (cierra Fase 1 Demo)
+
+### 🟡 Fill-ins (Hacer Después si Tiempo)
+**6 historias** — Valor medio, esfuerzo medio
+
+Incluye: HU-007, 013, 019, 021, 026, 028
+
+**Costo:** ~14-16 story points  
+**Beneficio:** Licencias, comparativa, registro, triaje, notificaciones, Dockerization, monitoring
+
+### 🔴 Time Sinks (Evaluar vs Timeline)
+**1 historia** — Valor medio, alto esfuerzo
+
+Incluye: HU-027 (CI/CD 3 stages)
+
+**Costo:** ~3 story points  
+**Beneficio:** Automatización deploy (diferible si presión timeline)
 
 
 ---

@@ -1,96 +1,103 @@
-# Backlog Consolidado: DemoWhatsappAgent
+# Backlog Consolidado: DemoWhatsappAgent v1.0 FINAL
 
-**Fuente:** 17 Historias de Usuario — Fase 1 Demo SOLAMENTE  
-**Épicas Activas v1.0:** 3 (EP-001, EP-002, EP-005)  
-**Épicas Diferidas v1.1:** EP-003 (Security), EP-004 (RAG)  
-**Framework:** Valor / Esfuerzo  
-**Fecha:** 2026-07-12  
-**Alcance v1.0:** Bienvenida, consultas comerciales, agendar demo, escalación, cierre graceful, disponibilidad 24/7, notificación de leads
+**Fuente:** 24 Historias de Usuario — Fase 1 Demo + Security + Deployment  
+**Épicas v1.0:** 4 (EP-001, EP-002, EP-003-MINI, EP-005-MINI)  
+**Eliminadas:** EP-004 (RAG, indefinidamente deferred)  
+**Framework:** Valor / Esfuerzo (priorización ejecutada)  
+**Fecha:** 2026-07-14  
+**Alcance v1.0:** Bot conversa, consultas, agendar, escalación, cierre, security (rate limit, input validation, audit, secrets), deployment (Docker, CI/CD, monitoring)
 
 ---
 
-## Tabla Consolidada: Todas las Historias
+## Tabla Consolidada: Todas las Historias v1.0 (24 HU) — ORDENADAS POR RATIO V/E
 
-| Prioridad | HU | Título | Épica | Complejidad | Estado | Actividad |
+| Prioridad | HU | Título | Épica | Complejidad | Estado | V/E Ratio |
 |-----------|----|----|-------|-------------|--------|-----------|
-| **MUST** | HU-001 | Primer contacto — bienvenida | EP-001 | 1 | draft | 1. Inicio |
-| **MUST** | HU-002 | Reconocimiento de intención (NLU) | EP-001 | 2 | draft | 1. Inicio |
-| **SHOULD** | HU-003 | Disponibilidad 24/7 | EP-005 | 1 | draft | 1. Inicio |
-| **MUST** | HU-004 | Consultar precio de módulo | EP-001 | 1 | draft | 2. Consulta |
-| **MUST** | HU-005 | Saber qué incluye cada módulo | EP-001 | 1 | draft | 2. Consulta |
-| **SHOULD** | HU-006 | Ver ofertas y promociones | EP-001 | 1 | draft | 2. Consulta |
-| **COULD** | HU-007 | Comparar dos módulos | EP-001 | 2 | draft | 2. Consulta |
-| **MUST** | HU-011a | Agendar demo/consultoría | EP-001 | 2 | lista | 4. Decisión |
-| **SHOULD** | HU-011b | Notificaciones post-agenda | EP-001 | 1 | lista | 4. Decisión |
-| **MUST** | HU-012 | Consultar si soporte vigente | EP-001 | 1 | lista | 4. Decisión |
-| **SHOULD** | HU-013 | Registrarse como cliente nuevo | EP-001 | 2 | draft | 4. Decisión |
-| **SHOULD** | HU-014 | Ver estado de licencia | EP-001 | 1 | draft | 4. Decisión |
-| **MUST** | HU-015 | Contactar directo con equipo (escalación + ticket + contexto) | EP-001 | 2 | draft | 5. Escalación |
-| **SHOULD** | HU-019 | Soporte triaja (comercial vs técnico) | EP-002 | 2 | draft | 5. Escalación |
-| **SHOULD** | HU-021 | Comercial notificado de nuevos leads | EP-005 | 2 | draft | 6. Seguimiento |
-| **SHOULD** | HU-024 | Usuario cierra conversación | EP-001 | 1 | draft | 7. Cierre |
-| **SHOULD** | HU-025 | Sistema detecta inactividad | EP-001 | 1 | draft | 7. Cierre |
-| **SHOULD** | HU-025 | Sistema detecta inactividad | EP-001 | 1 | draft | 7. Cierre |
+| **MUST** | HU-004 | Consultar precio de módulo | EP-001 | 1 | archivada | 5.0 |
+| **MUST** | HU-005 | Saber qué incluye cada módulo | EP-001 | 1 | archivada | 5.0 |
+| **MUST** | HU-012 | Consultar si soporte vigente | EP-001 | 1 | archivada | 5.0 |
+| **MUST** | HU-030 | Rate limiting en webhook | EP-003-MINI | 1 | lista | 5.0 |
+| **MUST** | HU-031 | Input validation & sanitization | EP-003-MINI | 1 | lista | 5.0 |
+| **MUST** | HU-033 | Secrets scrubbing en logs | EP-003-MINI | 1 | lista | 5.0 |
+| **MUST** | HU-001 | Primer contacto — bienvenida | EP-001 | 1 | archivada | 5.0 |
+| **MUST** | HU-024 | Usuario cierra conversación | EP-001 | 1 | archivada | 4.0 |
+| **SHOULD** | HU-014 | Ver estado de licencia | EP-001 | 1 | archivada | 4.0 |
+| **SHOULD** | HU-025 | Sistema detecta inactividad | EP-001 | 1 | archivada | 4.0 |
+| **SHOULD** | HU-006 | Ver ofertas y promociones | EP-001 | 1 | archivada | 4.0 |
+| **SHOULD** | HU-011b | Notificaciones post-agenda | EP-001 | 1 | archivada | 4.0 |
+| **SHOULD** | HU-003 | Disponibilidad 24/7 en producción | EP-005-MINI | 1 | lista | 4.0 |
+| **MUST** | HU-032 | Audit logging en high-stakes tools | EP-003-MINI | 2 | lista | 2.5 |
+| **MUST** | HU-002 | Reconocimiento de intención (NLU) | EP-001 | 2 | archivada | 2.5 |
+| **MUST** | HU-015 | Contactar directo con equipo (escalación) | EP-001 | 2 | archivada | 2.5 |
+| **MUST** | HU-011a | Agendar demo/consultoría | EP-001 | 2 | archivada | 2.5 |
+| **MUST** | HU-028 | Health checks & monitoring | EP-005-MINI | 2 | lista | 1.5 |
+| **SHOULD** | HU-013 | Registrarse como cliente nuevo | EP-001 | 2 | archivada | 1.5 |
+| **SHOULD** | HU-019 | Soporte triaja (comercial vs técnico) | EP-002 | 2 | archivada | 1.5 |
+| **SHOULD** | HU-021 | Comercial notificado de nuevos leads | EP-005-MINI | 2 | lista | 1.5 |
+| **COULD** | HU-007 | Comparar dos módulos | EP-001 | 2 | archivada | 1.5 |
+| **MUST** | HU-026 | Dockerization (multi-stage) | EP-005-MINI | 2 | lista | 1.5 |
+| **MUST** | HU-027 | CI/CD pipeline GitHub Actions | EP-005-MINI | 2 | lista | 1.0 |
 
 ---
 
-## Resumen por Épica
+## Resumen por Épica (v1.0)
 
-| Épica | Historias v1.0 | Cantidad | Estado |
-|-------|-----------|----------|--------|
-| **EP-001** (Test Suite + Features) | HU-001, 002, 004, 005, 006, 007, 011a, 011b, 012, 013, 014, 015, 024, 025 | 14 HU | ✅ ACTIVA |
-| **EP-002** (Error Handling + Triaje) | HU-019 | 1 HU | ✅ ACTIVA |
-| **EP-005** (Deploy + Disponibilidad) | HU-003, 021 | 2 HU | ✅ ACTIVA |
+| Épica | Historias | Cantidad | Estado | Esfuerzo |
+|-------|-----------|----------|--------|----------|
+| **EP-001** (Test Suite + Features) | HU-001 a 007, 011a/b, 012 a 015, 024 a 025 | 14 HU | ✅ ARCHIVADA | Completada |
+| **EP-002** (Error Handling & Resilience) | HU-019 | 1 HU | ✅ ARCHIVADA | Completada |
+| **EP-003-MINI** (Security Hardening) | HU-030, 031, 032, 033 | 4 HU | 🚀 NUEVA | 2 días |
+| **EP-005-MINI** (Deployment Stack) | HU-003, 021, 026, 027, 028 | 5 HU | 🚀 NUEVA | 3-4 días |
 
----
-
-## Resumen por Actividad (Journey Usuarios)
-
-| Actividad | Historias v1.0 | Estado |
-|-----------|-----------|--------|
-| 1. Inicio de Conversación | HU-001, 002, 003 | ✅ v1.0 |
-| 2. Consulta Comercial | HU-004, 005, 006, 007 | ✅ v1.0 |
-| 4. Decisión de Contacto | HU-011a/b, 012, 013, 014 | ✅ v1.0 |
-| 5. Escalación a Humano | HU-015, 019 | ✅ v1.0 |
-| 6. Seguimiento | HU-021 | ✅ v1.0 |
-| 7. Cierre de Flujo | HU-024, 025 | ✅ v1.0 |
+**Total v1.0:** 24 HU
 
 ---
 
-## Distribución de Complejidad (17 HU v1.0)
+## Resumen por Journey (Core Bot Flow)
+
+| Fase | Historias | Estado |
+|------|-----------|--------|
+| **0. Security** | HU-030, 031, 032, 033 | 🚀 Nueva (EP-003-MINI) |
+| **1. Inicio** | HU-001, 002, 003 | ✅ Archivada + Nueva (HU-003) |
+| **2. Consulta Comercial** | HU-004, 005, 006, 007 | ✅ Archivada |
+| **4. Decisión** | HU-011a/b, 012, 013, 014 | ✅ Archivada |
+| **5. Escalación** | HU-015, 019 | ✅ Archivada |
+| **6. Seguimiento** | HU-021 | 🚀 Nueva (EP-005-MINI) |
+| **7. Cierre** | HU-024, 025 | ✅ Archivada |
+| **9. Deployment** | HU-026, 027, 028 | 🚀 Nueva (EP-005-MINI) |
+
+---
+
+## Distribución de Complejidad (24 HU v1.0)
 
 | Complejidad | Cantidad | Ejemplos |
 |------------|----------|----------|
-| **1 (Trivial)** | 8 | HU-001, 003, 004, 005, 006, 011b, 014, 024 |
-| **2 (Media)** | 8 | HU-002, 007, 011a, 013, 015, 019, 021, 025 |
-| **3 (Alta)** | 1 | HU-012 |
-
-**Observación:** Mayoría son triviales-media (8+8 = 16 de 17). Solo 1 es alta (consultar licencia — high-stakes y bien justificada).
+| **1 (Trivial)** | 11 | HU-001, 003, 004, 005, 006, 011b, 014, 024, 030, 031, 033 |
+| **2 (Media)** | 12 | HU-002, 007, 011a, 013, 015, 019, 021, 025, 026, 027, 028, 032 |
+| **3 (Alta)** | 1 | HU-012 (consultar licencia) |
 
 ---
 
-## Resumen de Cobertura
+## Estado por Épica
 
-| Criterio | Cumple | Detalles |
-|----------|--------|----------|
-| **Cobertura PRD** | ✅ 100% | Todos los objetivos cubiertos por historias |
-| **Cobertura Épicas** | ✅ 100% | 3 épicas activas tienen historias (EP-001, EP-002, EP-005) |
-| **Cobertura USM** | ✅ 100% | 6 actividades v1.0 tienen historias |
-| **AC Formato** | ✅ 100% | Todas en Given/When/Then (con error/edge tras remediación) |
-| **High-Stakes Audit Logging** | ✅ | HU-011a, 012, 015, 019 marcadas |
-| **INVEST Validation** | 🔄 En progreso | 4/17 aprobadas; 13 en remediación |
-| **Roles Específicos** | 🔄 En progreso | 17/17 requieren re-titulación (eliminar "usuario" genérico) |
+| Épica | Status | Gaps Documentados | Fixes Necesarios | Timeline |
+|-------|--------|------------------|------------------|----------|
+| EP-001 | ✅ Archivada | 7 gaps (GAPS_EP001_EP002_AUDIT.md) | 4 críticos | Día 1-2 |
+| EP-002 | ✅ Archivada | 7 gaps (GAPS_EP001_EP002_AUDIT.md) | 3 críticos | Día 1-2 |
+| EP-003-MINI | 🚀 Nueva | Ninguno (scope definido) | Construcción nueva | Día 3-4 |
+| EP-005-MINI | 🚀 Nueva | Ninguno (scope definido) | Construcción nueva | Día 5-7 |
 
 ---
 
-## Notas Finales
+## Próximos Pasos
 
-- **Backlog Fase 1 Demo:** 17 historias (HU-001 a HU-007, HU-011a/b, HU-012 a HU-015, HU-019, HU-021, HU-024, HU-025)
-- **Épicas v1.0:** 3 (EP-001, EP-002, EP-005)
-- **Actividades Completas:** 6 de 7 (excluye búsqueda semántica que es v1.1)
-- **Remediación en curso:** Ampliar AC de error/edge + re-titular roles + declarar dependencias
+1. ✅ **Documentación Cerrada:** epicas.md + backlog.md + 7 HUs nuevas + 3 documentos de plan
+2. → **Ejecutar Fixes EP-001/002:** PLAN_CORRECCIONES_EP001_EP002.md (prioridad: FIX-EP002-3 FIRST)
+3. → **Construir EP-003-MINI:** HU-030/031/032/033
+4. → **Construir EP-005-MINI:** HU-026/027/028 (opcional si demo staging/prod)
 
 ---
 
-**Generado:** 2026-07-12  
-**Estado:** Draft, listo para Paso 6 (Priorización)
+**Generado:** 2026-07-14  
+**Revisor:** IngKevin95  
+**Estado:** ✅ FINAL — Documentación Cerrada, Listo para Ejecución
