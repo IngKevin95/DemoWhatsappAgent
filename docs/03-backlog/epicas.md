@@ -259,7 +259,7 @@ Empaquetar, asegurar y deployar el sistema a infraestructura productiva. Pase de
 
 ### Layer
 
-**Foundational** — Necesario para v1.0 release. Pero puede ser minimal (no full Kubernetes) para fase 1.
+**business** — Infraestructura de despliegue: necesario para v1.0 release, pero construible tras EP-001/EP-002 (cimientos).
 
 ### Estimación (Rough)
 
