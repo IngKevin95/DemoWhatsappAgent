@@ -94,6 +94,7 @@ def mock_env(monkeypatch):
         "META_API_TOKEN": "test_meta_token",
         "META_PHONE_NUMBER_ID": "123456789",
         "META_VERIFY_TOKEN": "test_verify_token",
+        "VERIFY_TOKEN": "test_verify_token",
         "DATABASE_URL": "postgresql://test:test@localhost/test_db",
         "FIREBIRD_HOST": "localhost",
         "ISC_PASSWORD": "test_firebird",
@@ -102,6 +103,17 @@ def mock_env(monkeypatch):
     for key, value in test_vars.items():
         monkeypatch.setenv(key, value)
     return test_vars
+
+
+@pytest.fixture
+def mock_proveedor():
+    """Mock the provider to avoid real API calls."""
+    mock = MagicMock()
+    mock.validar_firma = Mock(return_value=True)
+    mock.parsear_webhook = Mock(return_value=None)
+    mock.validar_webhook = Mock(return_value=None)
+    mock.enviar_mensaje = AsyncMock(return_value=None)
+    return mock
 
 
 @pytest.fixture

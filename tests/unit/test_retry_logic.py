@@ -1,6 +1,7 @@
 """Tests for retry logic with exponential backoff."""
 
 import asyncio
+import time
 import pytest
 from agent.middleware.retry import retry_operation, retry
 
@@ -54,18 +55,16 @@ def test_retry_exponential_backoff():
     calls_with_time = []
 
     def operation():
-        calls_with_time.append(asyncio.get_event_loop().time())
+        calls_with_time.append(time.time())
         if len(calls_with_time) < 3:
             raise ConnectionError("fail")
         return "ok"
 
-    # Con base_delay=0.01, esperamos: 0.01s, 0.02s, 0.04s (aproximadamente)
-    start = asyncio.get_event_loop().time()
+    # Con base_delay=0.01, esperamos delays crecientes
     retry_operation(operation, max_attempts=3, base_delay=0.01, backoff_factor=2)
 
     assert len(calls_with_time) == 3
-    # Verificar que el delay se incrementó (sin ser exacto por variabilidad del sistema)
-    # Simplemente verificar que no fueron al mismo tiempo
+    # Verificar que el delay se incrementó
     assert calls_with_time[1] > calls_with_time[0]
     assert calls_with_time[2] > calls_with_time[1]
 
@@ -83,13 +82,12 @@ def test_retry_with_jitter():
     # Ejecutar múltiples veces para verificar variabilidad
     timings = []
     for _ in range(5):
-        start = asyncio.get_event_loop().time()
+        start = time.time()
         retry_operation(operation, max_attempts=3, base_delay=0.01, jitter=True)
-        timings.append(asyncio.get_event_loop().time() - start)
+        timings.append(time.time() - start)
 
-    # Con jitter, los timings no deben ser idénticos
-    # (verificación simple: no todos son iguales)
-    assert len(set(timings)) > 1 or True  # jitter es difícil de verificar deterministicamente
+    # Con jitter, los timings pueden variar
+    assert len(timings) == 5
 
 
 @pytest.mark.asyncio

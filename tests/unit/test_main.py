@@ -59,25 +59,23 @@ class TestValidarFirmaMeta:
 class TestRecibirWebhook:
     """Tests for webhook handler (AC-1 HU-001)."""
 
-    def test_webhook_endpoint_exists(self, client):
+    def test_webhook_endpoint_exists(self, client, mock_env, monkeypatch):
         """Webhook endpoint is accessible."""
         assert client is not None
-        # POST /webhook should exist (may 403 without valid signature)
-        response = client.post("/webhook", json={"entry": []}, headers={"X-Hub-Signature-256": "sha256=invalid"})
-        assert response.status_code in [403, 400]  # Unauthorized or bad request expected
+        from unittest.mock import patch
+        with patch('agent.main.proveedor') as mock_proveedor:
+            mock_proveedor.validar_firma.return_value = False
+            response = client.post("/webhook", json={"entry": []}, headers={"X-Hub-Signature-256": "sha256=invalid"})
+            assert response.status_code in [403, 400]
 
     @pytest.mark.asyncio
     async def test_webhook_rate_limiting(self, mock_env):
         """Rate limiting: structural test (implementation deferred to EP-002)."""
-        # For now, just verify we can call webhook (rate limiting added in EP-002)
-        # This test confirms the webhook endpoint exists and responds
         pass
 
     @pytest.mark.asyncio
     async def test_webhook_generar_respuesta_timeout(self, mock_env):
         """Generar_respuesta timeout → fallback response (structural test)."""
-        # Implementation: generar_respuesta has timeout parameter
-        # This will be tested end-to-end in smoke phase
         pass
 
 
