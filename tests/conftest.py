@@ -157,6 +157,15 @@ def patch_db_connections(monkeypatch):
     """Patch all DB connections to prevent real connections in tests."""
     from unittest.mock import patch, AsyncMock, MagicMock
 
+    # Patch SyncSession to prevent real DB connections
+    mock_session = MagicMock()
+    mock_session.query = MagicMock(return_value=MagicMock())
+    mock_session.__enter__ = MagicMock(return_value=mock_session)
+    mock_session.__exit__ = MagicMock(return_value=None)
+
+    monkeypatch.setattr("agent.db.SyncSession", MagicMock(return_value=mock_session))
+    monkeypatch.setattr("agent.tools.SyncSession", MagicMock(return_value=mock_session))
+
     # Patch memory.py async functions
     monkeypatch.setattr(
         "agent.memory.guardar_mensaje",
