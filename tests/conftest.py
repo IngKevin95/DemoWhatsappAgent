@@ -1,11 +1,15 @@
 """Shared test fixtures for agent tests."""
 
 import os
+import sys
 import pytest
 from pathlib import Path
 from unittest.mock import Mock, AsyncMock, MagicMock
 from datetime import datetime, timedelta, timezone
 from dotenv import load_dotenv
+
+# Add project root to path for imports
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Load test environment before importing agent modules
 env_test = Path(__file__).parent.parent / ".env.test"
