@@ -16,7 +16,7 @@ class Mensaje(Base):
     __tablename__ = "mensajes"
 
     id = Column(Integer, primary_key=True)
-    telefono = Column(String, index=True)
+    telefono = Column(String, ForeignKey("contactos.telefono"), index=True)
     role = Column(String)
     content = Column(String)
     area_id = Column(Integer, ForeignKey("areas.id"), nullable=True)

@@ -1,5 +1,6 @@
 fastapi
 uvicorn[standard]
+gunicorn
 httpx
 sqlalchemy
 asyncpg
@@ -11,7 +12,10 @@ google-api-python-client
 google-auth-httplib2
 google-auth-oauthlib
 firebird-driver
+prometheus-client
+APScheduler
 pytest
 pytest-asyncio
 pytest-cov
 pybreaker
+bandit

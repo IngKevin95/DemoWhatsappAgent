@@ -50,4 +50,23 @@ package.json
 
 # ── factory-build-harness (auto) ───────────────────────
 .claude/state/build-state.json
+.claude/agents/build/
+.claude/commands/opsx/
+.claude/commands/build/
+.claude/hooks/build/
+.claude/skills/building-a-micro-change/
+.claude/skills/building-a-slice/
+.claude/skills/openspec-apply-change/
+.claude/skills/openspec-archive-change/
+.claude/skills/openspec-bulk-archive-change/
+.claude/skills/openspec-complete-artifacts/
+.claude/skills/openspec-continue-change/
+.claude/skills/openspec-explore/
+.claude/skills/openspec-ff-change/
+.claude/skills/openspec-new-change/
+.claude/skills/openspec-onboard/
+.claude/skills/openspec-sync-specs/
+.claude/skills/openspec-verify-change/
+.claude/skills/releasing-a-version/
+.claude/.build-harness-version
 # ── /factory-build-harness ──────────────────────

@@ -1,0 +1,5 @@
+# SSL certificates will be mounted here at runtime
+# For local development: use self-signed certs
+# For production: use Let's Encrypt or your CA provider
+# Example: certbot certonly --standalone -d api.yourdomain.com
+# Then copy fullchain.pem → cert.pem, privkey.pem → key.pem
