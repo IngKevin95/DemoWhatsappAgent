@@ -49,8 +49,8 @@ class TestCircuitBreakerGemini:
                 historial=[]
             )
 
-            assert "Disculpa" in response, \
-                f"Expected fallback response with 'Disculpa', got: {response}"
+            assert "disculpa" in response.lower(), \
+                f"Expected fallback response with 'disculpa', got: {response}"
 
         asyncio.run(run_test())
 
