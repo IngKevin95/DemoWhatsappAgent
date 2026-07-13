@@ -3,6 +3,7 @@ from datetime import datetime, timedelta
 from functools import lru_cache
 
 import httpx
+from agent.utilities.retry import retry
 
 BASE_URL = os.getenv("ESPOCRM_URL", "http://espocrm")
 API_KEY = os.getenv("ESPOCRM_API_KEY", "")
@@ -26,6 +27,8 @@ def _e164(telefono: str) -> str:
     return telefono if telefono.startswith("+") else f"+{telefono}"
 
 
+# FIX-REPAIR-003: Apply retry decorator for consistency with Google integration
+@retry(max_attempts=3, backoff_base=2.0, exceptions=(Exception,))
 def crear_lead(nombre: str, telefono: str, empresa: str, correo: str, interes: str) -> dict:
     body = {
         "lastName": nombre,
@@ -54,6 +57,7 @@ def consultar_casos_por_telefono(telefono: str) -> list[dict]:
     return r.json().get("list", [])
 
 
+@retry(max_attempts=3, backoff_base=2.0, exceptions=(Exception,))
 def crear_caso(telefono: str, descripcion: str, modulo: str) -> dict:
     body = {
         "name": f"Soporte {modulo} - {telefono}",
@@ -93,6 +97,7 @@ def consultar_reunion(telefono: str) -> dict | None:
     return lista[0] if lista else None
 
 
+@retry(max_attempts=3, backoff_base=2.0, exceptions=(Exception,))
 def crear_reunion(nombre: str, telefono: str, motivo: str, fecha: str, hora: str, duracion_min: int = 30) -> dict:
     inicio = f"{fecha} {hora}:00"
     fin = f"{fecha} {(datetime.strptime(hora, '%H:%M') + timedelta(minutes=duracion_min)).strftime('%H:%M')}:00"

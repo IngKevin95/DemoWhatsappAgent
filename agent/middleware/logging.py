@@ -2,8 +2,34 @@
 
 import json
 import logging
+import re
 import sys
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
+
+class TokenSanitizer:
+    """FIX-REPAIR-001: Redacta tokens, credentials de strings."""
+
+    PATTERNS: List[Tuple[str, str]] = [
+        (r"(?i)(authorization|bearer)[\s:]*([a-zA-Z0-9\-._~+/]+=*)", r"\1: [REDACTED]"),
+        (r"(?i)(access_token|refresh_token)[\s:]*([^\s,\n]+)", r"\1: [REDACTED]"),
+        (r"(?i)(sk-proj-[a-zA-Z0-9\-._]+)", "[REDACTED]"),
+        (r"(?i)(ya29\.[a-zA-Z0-9\-_]+)", "[REDACTED]"),
+        (r"(?i)(database_url|db_url)[\s:=]*([^\s\n]+)", r"\1: [REDACTED]"),
+        (r"(?i)(postgresql|mysql|mongodb)://([^/@\s]+):([^/@\s]+)@", r"\1://[REDACTED]:[REDACTED]@"),
+        (r"(?i)(api_key|apikey|secret_key)[\s:=]*([^\s,\n]+)", r"\1: [REDACTED]"),
+        (r"(?i)(password)[\s:=]*([^\s,\n]+)", r"\1: [REDACTED]"),
+    ]
+
+    @classmethod
+    def sanitize(cls, text: str) -> str:
+        """Redacta credentials en text."""
+        if not text:
+            return text
+        sanitized = text
+        for pattern, replacement in cls.PATTERNS:
+            sanitized = re.sub(pattern, replacement, sanitized)
+        return sanitized
 
 
 def setup_structured_logging(
@@ -55,10 +81,14 @@ class JSONFormatter(logging.Formatter):
 
     def format(self, record: logging.LogRecord) -> str:
         """Format log record as JSON."""
+        msg = record.getMessage()
+        # FIX-REPAIR-001: Sanitize tokens/credentials in message
+        msg = TokenSanitizer.sanitize(msg)
+
         log_data: Dict[str, Any] = {
             "timestamp": self.formatTime(record),
             "level": record.levelname,
-            "message": record.getMessage(),
+            "message": msg,
             "module": record.module,
         }
 

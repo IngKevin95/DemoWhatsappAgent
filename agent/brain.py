@@ -10,8 +10,25 @@ from google import genai
 from google.genai import errors, types
 
 from . import tools
+from .middleware.circuit_breaker import CircuitBreaker
 
 logger = logging.getLogger(__name__)
+
+# FIX-REPAIR-002: Circuit breaker para Gemini
+def _fallback_generar_respuesta(*args, **kwargs) -> str:
+    """Fallback cuando circuit breaker abre (Gemini caído)."""
+    return "Disculpa, estoy ocupado en este momento. ¿Puedes reformular tu pregunta?"
+
+# FIX-REPAIR-004: Timeout config from .env
+GEMINI_TIMEOUT_SECONDS = float(os.getenv('GEMINI_TIMEOUT_SECONDS', '10.0'))
+GEMINI_YELLOW_ZONE_SECONDS = 5.0  # Warn if latency > this
+
+_circuit_breaker_gemini = CircuitBreaker(
+    name="Gemini",
+    failure_threshold=int(os.getenv('CIRCUIT_BREAKER_THRESHOLD', '3')),
+    recovery_timeout=int(os.getenv('CIRCUIT_BREAKER_WINDOW_SEC', '30')),
+    fallback_fn=_fallback_generar_respuesta,
+)
 
 # ponytail: estas tools reciben `telefono` como identificador del remitente real,
 # no como dato que el modelo deba inventar/extraer del texto. functools.partial no
@@ -154,9 +171,12 @@ async def generar_respuesta(
     telefono: str,
     historial: list[dict] | None = None,
     herramientas: list | None = None,
-    timeout_segundos: float = 30.0,
+    timeout_segundos: float = None,
 ) -> str:
-    """Genera respuesta usando Gemini con timeout y fallback."""
+    """FIX-REPAIR-004: Genera respuesta con timeout configurable y yellow zone logging."""
+    # Use .env config if not specified
+    if timeout_segundos is None:
+        timeout_segundos = GEMINI_TIMEOUT_SECONDS
     if historial is None:
         historial = []
 
@@ -164,6 +184,7 @@ async def generar_respuesta(
     texto_usuario = _sanitizar_input(mensaje)
 
     texto = None
+    tiempo_inicio = None
     for intento in range(2):
         try:
             chat = client.chats.create(
@@ -174,13 +195,34 @@ async def generar_respuesta(
                     tools=_tools_para(telefono),
                 ),
             )
-            # Send message with timeout
+            # Send message with timeout + circuit breaker
             try:
+                import time as time_module
+                tiempo_inicio = time_module.time()
+
+                # FIX-REPAIR-002: Apply circuit breaker to Gemini call
+                def _send_with_cb():
+                    return _circuit_breaker_gemini(
+                        lambda: chat.send_message(texto_usuario)
+                    )
+
                 respuesta = await asyncio.wait_for(
-                    asyncio.to_thread(chat.send_message, texto_usuario),
+                    asyncio.to_thread(_send_with_cb),
                     timeout=timeout_segundos
                 )
+                # Check if result is fallback string (from circuit breaker)
+                if isinstance(respuesta, str) and "Disculpa" in respuesta:
+                    return respuesta
                 texto = respuesta.text
+
+                # FIX-REPAIR-004: Yellow zone logging if latency > 5s
+                if tiempo_inicio:
+                    latency = time_module.time() - tiempo_inicio
+                    if latency > GEMINI_YELLOW_ZONE_SECONDS:
+                        logger.warning(
+                            f"Gemini latency YELLOW ZONE for {telefono}: {latency:.2f}s "
+                            f"(threshold: {GEMINI_YELLOW_ZONE_SECONDS}s, timeout: {timeout_segundos}s)"
+                        )
                 break
             except asyncio.TimeoutError:
                 logger.warning("Timeout en Gemini para %s después de %.1fs", telefono, timeout_segundos)
