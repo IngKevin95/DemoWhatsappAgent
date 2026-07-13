@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import random
+import re
 from datetime import datetime
 
 import yaml
@@ -141,7 +142,27 @@ def _retry_delay_segundos(exc: errors.ClientError, default: float = 5.0) -> floa
     return default
 
 
-async def generar_respuesta(telefono: str, texto_usuario: str, historial: list[dict]) -> str:
+def _sanitizar_input(texto: str) -> str:
+    # Remove SQL/script keywords
+    texto = re.sub(r"(?i)(drop|delete|update|insert|select|script|eval|exec)", "", texto)
+    texto = re.sub(r"<script[^>]*>.*?</script>", "", texto, flags=re.DOTALL)
+    return texto.strip()
+
+
+async def generar_respuesta(
+    mensaje: str,
+    telefono: str,
+    historial: list[dict] | None = None,
+    herramientas: list | None = None,
+    timeout_segundos: float = 30.0,
+) -> str:
+    """Genera respuesta usando Gemini con timeout y fallback."""
+    if historial is None:
+        historial = []
+
+    # Sanitize input
+    texto_usuario = _sanitizar_input(mensaje)
+
     texto = None
     for intento in range(2):
         try:
@@ -153,12 +174,18 @@ async def generar_respuesta(telefono: str, texto_usuario: str, historial: list[d
                     tools=_tools_para(telefono),
                 ),
             )
-            # ponytail: send_message es sync y ejecuta el function-calling automático
-            # (incluye las tools de agent/tools.py, todas sync) dentro de su propia
-            # llamada — a to_thread para no bloquear el event loop de Uvicorn.
-            respuesta = await asyncio.to_thread(chat.send_message, texto_usuario)
-            texto = respuesta.text
-            break
+            # Send message with timeout
+            try:
+                respuesta = await asyncio.wait_for(
+                    asyncio.to_thread(chat.send_message, texto_usuario),
+                    timeout=timeout_segundos
+                )
+                texto = respuesta.text
+                break
+            except asyncio.TimeoutError:
+                logger.warning("Timeout en Gemini para %s después de %.1fs", telefono, timeout_segundos)
+                return random.choice(RESPUESTAS_FALLBACK)
+
         except errors.ClientError as e:
             if e.code == 429 and intento == 0:
                 espera = _retry_delay_segundos(e)
@@ -172,3 +199,80 @@ async def generar_respuesta(telefono: str, texto_usuario: str, historial: list[d
             break
 
     return texto if texto else random.choice(RESPUESTAS_FALLBACK)
+
+
+def clasificar_intencion(texto: str) -> dict:
+    """Classify intent from user message."""
+    texto_lower = texto.lower()
+
+    # Simple keyword matching
+    if any(w in texto_lower for w in ["hola", "saludos", "buenos días", "buenas noches"]):
+        return {"intencion": "bienvenida", "confianza": 0.95}
+    elif any(w in texto_lower for w in ["precio", "costo", "valor", "cuánto cuesta"]):
+        return {"intencion": "consultar_precio", "confianza": 0.9}
+    elif any(w in texto_lower for w in ["agendar", "agenda", "demo", "cita", "reunión"]):
+        return {"intencion": "agendar_cita", "confianza": 0.85}
+    elif any(w in texto_lower for w in ["licencia", "estado", "vigencia", "suscripción"]):
+        return {"intencion": "consultar_licencia", "confianza": 0.8}
+    elif any(w in texto_lower for w in ["escala", "soporte", "urgente", "problema", "error"]):
+        return {"intencion": "escalar_a_humano", "confianza": 0.75}
+    else:
+        return {"intencion": "unknown", "confianza": 0.3}
+
+
+def consultar_precio_modulo(nombre_modulo: str, moneda: str = "EUR", cantidad: int = 1) -> dict:
+    """Query module price from database."""
+    if cantidad <= 0:
+        return {"error": "Cantidad debe ser mayor a 0"}
+
+    # ponytail: stub that would query Postgres (mocked in tests)
+    modulos = {
+        "Pro": {"precio": 999, "moneda": "EUR"},
+        "Enterprise": {"precio": 2999, "moneda": "EUR"},
+        "Starter": {"precio": 299, "moneda": "EUR"},
+    }
+
+    if nombre_modulo not in modulos:
+        return {"error": f"Módulo '{nombre_modulo}' no encontrado"}
+
+    resultado = modulos[nombre_modulo].copy()
+    resultado["cantidad"] = cantidad
+    resultado["total"] = resultado["precio"] * cantidad
+    return resultado
+
+
+def reclasificar_caso_sin_licencia(telefono: str, descripcion_caso: str) -> dict:
+    """Check if user has license, reclassify if not."""
+    # ponytail: stub (would query Firebird in production)
+    return {
+        "puede_procesar": True,
+        "redirigir_a": None,
+    }
+
+
+def buscar_en_conocimiento(query: str, top_k: int = 3) -> dict:
+    """Search knowledge base (stub: RAG deferred to EP-004)."""
+    return {
+        "query": query,
+        "resultados": [],
+        "nota": "RAG backend not yet implemented (EP-004)",
+    }
+
+
+def guardrails_check(texto: str) -> dict:
+    """Check for harmful or injection attempts."""
+    bloqueado = False
+    razon = ""
+
+    # Simple checks for obvious injection attempts
+    if any(pattern in texto.lower() for pattern in [
+        "ignora", "instrucción", "drop table", "delete from", "system:", "prompt:", "<script"
+    ]):
+        bloqueado = True
+        razon = "Intento de inyección detectado"
+
+    return {
+        "bloqueado": bloqueado,
+        "razon": razon,
+        "riesgo": "alto" if bloqueado else "bajo",
+    }
