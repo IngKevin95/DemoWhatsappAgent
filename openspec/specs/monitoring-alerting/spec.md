@@ -1,7 +1,8 @@
-# Monitoring & Alerting Specification
+# monitoring-alerting Specification
 
-## ADDED Requirements
-
+## Purpose
+TBD - created by archiving change ep-005-mini. Update Purpose after archive.
+## Requirements
 ### Requirement: Prometheus Metrics Instrumentation
 The system SHALL collect key metrics and expose them in Prometheus format.
 
@@ -95,3 +96,4 @@ The system SHALL retain metrics for troubleshooting.
 #### Scenario: Prometheus retention
 - **WHEN** Prometheus service runs
 - **THEN** retains metrics for 30 days (default) or as configured via --storage.tsdb.retention.time
+

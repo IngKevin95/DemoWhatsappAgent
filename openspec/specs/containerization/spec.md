@@ -1,7 +1,8 @@
-# Containerization Specification
+# containerization Specification
 
-## ADDED Requirements
-
+## Purpose
+TBD - created by archiving change ep-005-mini. Update Purpose after archive.
+## Requirements
 ### Requirement: Docker Multi-Stage Build
 The system SHALL provide a Dockerfile that uses multi-stage builds to separate build-time dependencies from runtime, resulting in a minimal production image.
 
@@ -46,3 +47,4 @@ The system SHALL accept all secrets and configuration via environment variables 
 #### Scenario: Secrets not in logs
 - **WHEN** an exception occurs
 - **THEN** exception logs do not contain DATABASE_URL, GOOGLE_*, META_*, FIREBIRD_* values (scrubbed)
+

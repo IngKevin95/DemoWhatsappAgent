@@ -1,7 +1,8 @@
-# Health Checks Specification
+# health-checks Specification
 
-## ADDED Requirements
-
+## Purpose
+TBD - created by archiving change ep-005-mini. Update Purpose after archive.
+## Requirements
 ### Requirement: /health Endpoint
 The system SHALL provide a `/health` endpoint that returns the status of the application and its dependencies.
 
@@ -77,3 +78,4 @@ The system SHALL timeout external service probes to prevent hanging.
 #### Scenario: EspoCRM probe timeout
 - **WHEN** EspoCRM endpoint is unreachable
 - **THEN** probe times out after 5 seconds, status "degraded", /health returns without blocking
+

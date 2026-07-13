@@ -1,7 +1,8 @@
-# Nginx Reverse Proxy Specification
+# nginx-reverse-proxy Specification
 
-## ADDED Requirements
-
+## Purpose
+TBD - created by archiving change ep-005-mini. Update Purpose after archive.
+## Requirements
 ### Requirement: Reverse Proxy Configuration
 The system SHALL route incoming HTTP traffic through Nginx to Gunicorn backend.
 
@@ -106,3 +107,4 @@ The system SHALL orchestrate Nginx as a service in docker-compose.prod.yml.
 #### Scenario: Network isolation
 - **WHEN** Nginx and Gunicorn containers start
 - **THEN** both connect to same Docker network (app_network), allowing Nginx to reach Gunicorn via service name (http://app:8000)
+

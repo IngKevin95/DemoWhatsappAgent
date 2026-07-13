@@ -1,7 +1,8 @@
-# CI/CD Pipeline Specification
+# ci-cd-pipeline Specification
 
-## ADDED Requirements
-
+## Purpose
+TBD - created by archiving change ep-005-mini. Update Purpose after archive.
+## Requirements
 ### Requirement: Test Stage (CI)
 The system SHALL run automated tests on every push to a feature branch, preventing merge if tests fail or coverage drops below threshold.
 
@@ -68,3 +69,4 @@ The system SHALL provide .github/workflows/deploy.yml defining the entire pipeli
 #### Scenario: Workflow is version controlled
 - **WHEN** repository is cloned
 - **THEN** `.github/workflows/deploy.yml` exists and is tracked in git
+
