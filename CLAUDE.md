@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-<!-- BEGIN factory-build-harness v0.6.0 -->
+<!-- BEGIN factory-build-harness v0.8.0 -->
 ## Arnés de construcción (Factory Build Harness)
 
 Este proyecto instaló `@factory/factory-spec-build`, el arnés que toma el trabajo de discovery
@@ -68,13 +68,13 @@ Reglas de nomenclatura que conviene memorizar:
 `security-reviewer`, `stack-guardian`, `data-consistency-checker`, `ux-krug-reviewer`,
 `simple-design-reviewer` y `ux-fidelity-reviewer`:
 
-- PRD técnico (de dónde sale el stack): `ARCHITECTURE.md#stack-de-desarrollo-y-por-que-se-eligio` + `docs/07-arquitectura/` (fase-1-demo)
-- Frontera de servicios externos / IA: Gemini (LLM conversacional), Google APIs (Calendar OAuth2, Gmail), Meta Cloud API (WhatsApp), NocoDB (UI admin), Firebird (demo: licencias), EspoCRM (demo: CRM)
-- Qué lógica debe ser determinista (nada de IA ahí): SQLAlchemy queries y ORM (persistencia de ofertas, módulos, parámetros), function-calling routing (mapeo intención → tool), prompt templates en config/prompts.yaml, validación de datos e invariantes de dominio
-- Categorías de dato sensible / PII regulada: OAuth tokens (Google Calendar/Gmail), WhatsApp/Meta credentials, database credentials (Postgres, Firebird)
-- Dónde viven los secretos server-side: DATABASE_URL, GOOGLE_APPLICATION_CREDENTIALS, GOOGLE_OAUTH_TOKEN, META_API_TOKEN, FIREBIRD_* credentials, NocoDB admin credentials, cloudflared tunnel token (si dockerizado)
-- Decisiones de alto impacto que necesitan explicabilidad en la UX: Escalate to human (derivar a agente), reclasify case (reclasificación de caso), create Google Calendar appointment (crear cita real), licencia state (determinar elegibilidad por licencia/soporte)
-- Fuente de diseño / referencia visual del proyecto: N/A (app es bot de WhatsApp sin UI web propia; interfaz es webhook + admin NocoDB externa; no aplica fidelidad visual)
+- PRD técnico (de dónde sale el stack): ARCHITECTURE.md (stack: FastAPI + Uvicorn + Gemini + SQLAlchemy + PostgreSQL + Google APIs + Meta + EspoCRM + Firebird)
+- Frontera de servicios externos / IA: Gemini (LLM function-calling) + Google APIs (Calendar, Gmail) + Meta Cloud API (WhatsApp) + EspoCRM (CRM) + Firebird (licencias)
+- Qué lógica debe ser determinista (nada de IA ahí): SQLAlchemy queries + function-calling routing + input validation (sanitización de scripts/SQL) + audit logging (scrubbing de secretos)
+- Categorías de dato sensible / PII regulada: OAuth tokens (Google), API credentials (Meta), chat history, teléfono usuario
+- Dónde viven los secretos server-side: DATABASE_URL, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, META_API_TOKEN, FIREBIRD_HOST, FIREBIRD_USER, FIREBIRD_PASSWORD, NocoDB credenciales, cloudflared tunnel token (todos en .env/volúmenes Docker, nunca en cliente)
+- Decisiones de alto impacto que necesitan explicabilidad en la UX: Escalar caso a humano (requiere contexto conversacional), Reclasificar usuario como sin_licencia (afecta ofertas posteriores), Crear cita Google (commit externo), Validar elegibilidad para soporte (basada en Firebird)
+- Fuente de diseño / referencia visual del proyecto: N/A — Bot de WhatsApp conversacional sin UI web. Interfaz es chat nativo de WhatsApp.
 
 Si algún punto sigue mostrando `{{...}}`, todavía no corriste `/build:setup`.
 
