@@ -261,3 +261,57 @@ class TestGuardrailsCheck:
         )
         # Should be flagged as suspicious
         assert resultado["bloqueado"] is True or resultado.get("riesgo") == "alto"
+
+
+class TestIntegrationScenarios:
+    """Integration-style tests for core flows."""
+
+    @pytest.mark.asyncio
+    async def test_generar_respuesta_con_contexto_vacio(self, mock_env, mock_gemini):
+        """Generate response with empty context."""
+        with patch("agent.brain.genai") as mock_genai_module:
+            mock_genai_module.Client.return_value.models.generate_content = mock_gemini.generate_content
+
+            resultado = await generar_respuesta(
+                mensaje="Test",
+                telefono="34912345678",
+                historial=[],
+                herramientas=None
+            )
+            assert resultado is not None
+
+    @pytest.mark.asyncio
+    async def test_generar_respuesta_con_herramientas(self, mock_env, mock_gemini):
+        """Generate response with tools list."""
+        with patch("agent.brain.genai") as mock_genai_module:
+            mock_genai_module.Client.return_value.models.generate_content = mock_gemini.generate_content
+
+            resultado = await generar_respuesta(
+                mensaje="Agendar cita",
+                telefono="34912345678",
+                historial=[],
+                herramientas=["agendar_cita", "consultar_precio"]
+            )
+            assert resultado is not None
+
+    def test_clasificar_intencion_confianza_alta(self):
+        """Classification with high confidence."""
+        resultado = clasificar_intencion("Hola")
+        if "confianza" in resultado:
+            assert 0 <= resultado["confianza"] <= 1
+
+    def test_clasificar_intencion_confianza_baja(self):
+        """Classification with low confidence edge case."""
+        resultado = clasificar_intencion("xyz123!@#")
+        assert isinstance(resultado, dict)
+
+    def test_guardrails_check_empty_input(self):
+        """Guardrails handles empty input."""
+        resultado = guardrails_check("")
+        assert isinstance(resultado, dict)
+
+    def test_guardrails_check_very_long_input(self):
+        """Guardrails handles very long input."""
+        long_input = "test " * 1000
+        resultado = guardrails_check(long_input)
+        assert isinstance(resultado, dict)

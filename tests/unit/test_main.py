@@ -97,3 +97,92 @@ class TestWebhookAuditLogging:
         assert os.getenv("GEMINI_API_KEY") is not None
         assert os.getenv("META_API_TOKEN") is not None
         assert len(os.getenv("GEMINI_API_KEY", "")) > 0
+
+
+class TestWebhookInputValidation:
+    """Tests for input validation in webhook."""
+
+    def test_webhook_malformed_json(self, client):
+        """Malformed JSON request rejected."""
+        if client is None:
+            pytest.skip("App not available")
+        response = client.post(
+            "/webhook",
+            data="not valid json",
+            headers={"X-Hub-Signature-256": "sha256=test"}
+        )
+        assert response.status_code in [400, 422]
+
+    def test_webhook_empty_body(self, client, mock_env):
+        """Empty webhook body handled gracefully."""
+        if client is None:
+            pytest.skip("App not available")
+        response = client.post(
+            "/webhook",
+            json={},
+            headers={"X-Hub-Signature-256": "sha256=invalid"}
+        )
+        assert response.status_code in [400, 403]
+
+    def test_webhook_missing_entry(self, client):
+        """Webhook without 'entry' field rejected."""
+        if client is None:
+            pytest.skip("App not available")
+        response = client.post(
+            "/webhook",
+            json={"object": "page"},
+            headers={"X-Hub-Signature-256": "sha256=invalid"}
+        )
+        # Either 400 (bad request) or 403 (unauthorized)
+        assert response.status_code in [400, 403, 422]
+
+
+class TestWebhookEdgeCases:
+    """Edge cases for webhook handling."""
+
+    def test_webhook_very_long_message(self, client):
+        """Webhook with very long message handled."""
+        if client is None:
+            pytest.skip("App not available")
+        long_msg = "A" * 10000
+        response = client.post(
+            "/webhook",
+            json={
+                "entry": [{
+                    "changes": [{
+                        "value": {
+                            "messages": [{
+                                "from": "34912345678",
+                                "text": {"body": long_msg}
+                            }]
+                        }
+                    }]
+                }]
+            },
+            headers={"X-Hub-Signature-256": "sha256=invalid"}
+        )
+        # Server should respond (may be 403 for bad signature)
+        assert response.status_code in [400, 403, 422, 500]
+
+    def test_webhook_unicode_characters(self, client):
+        """Webhook with unicode characters handled."""
+        if client is None:
+            pytest.skip("App not available")
+        response = client.post(
+            "/webhook",
+            json={
+                "entry": [{
+                    "changes": [{
+                        "value": {
+                            "messages": [{
+                                "from": "34912345678",
+                                "text": {"body": "Hola, ¿cómo estás? 你好"}
+                            }]
+                        }
+                    }]
+                }]
+            },
+            headers={"X-Hub-Signature-256": "sha256=invalid"}
+        )
+        # Server should handle unicode
+        assert response.status_code in [400, 403, 422]
