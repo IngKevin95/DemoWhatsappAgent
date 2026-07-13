@@ -104,7 +104,7 @@ Meta. Migrar a Named Tunnel (URL fija, sí dockerizable con volumen para
 decisión del usuario (no quiere crear cuenta por ahora).
 
 Archivos relacionados: `cloudflared.exe`, `cloudflared.log` (raíz del repo,
-no están en `.gitignore` — son operativos, no secretos).
+sí están en `.gitignore` — binarios/logs operativos, no se versionan).
 
 ### Detener el túnel
 
@@ -122,6 +122,46 @@ taskkill /IM cloudflared.exe /F
 
 Al detenerlo, el webhook de Meta pierde a dónde llegar — `sysbot` sigue
 corriendo en Docker pero sin exposición a internet.
+
+### Levantar el túnel de nuevo (tras una caída)
+
+1. Verificar que `sysbot` responde localmente antes de exponerlo:
+   ```powershell
+   curl http://localhost:8000
+   ```
+   Si no responde, arrancar el stack (`docker compose up -d`) antes de seguir.
+
+2. Revisar si quedó un proceso `cloudflared.exe` colgado (puede seguir "vivo"
+   en memoria aunque el binario ya no exista en disco — pasó exactamente eso
+   el 2026-07-10: el `.exe` desapareció de la raíz del repo pero el proceso
+   viejo seguía corriendo, sin loguear nada nuevo, y el túnel dejó de
+   funcionar sin avisar):
+   ```powershell
+   tasklist /FI "IMAGENAME eq cloudflared.exe"
+   taskkill /IM cloudflared.exe /F   # si aparece uno
+   ```
+
+3. Si `cloudflared.exe` no está en la raíz del repo, descargarlo de nuevo
+   (no se versiona, está en `.gitignore`):
+   ```powershell
+   curl -L -o cloudflared.exe https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe
+   ```
+
+4. Lanzar el túnel (deja la terminal abierta, o usa `start` para dejarlo en
+   background):
+   ```powershell
+   .\cloudflared.exe tunnel --url http://localhost:8000 > cloudflared.log 2>&1
+   ```
+
+5. Leer `cloudflared.log` — la URL nueva aparece en el bloque "Your quick
+   Tunnel has been created!" (`https://<palabras-aleatorias>.trycloudflare.com`).
+   **Cada arranque genera una URL distinta.**
+
+6. Actualizar el Callback URL del webhook en Meta for Developers
+   (WhatsApp > Configuration) con la nueva URL + `/webhook`, y volver a
+   verificar el token si Meta lo pide.
+
+URL actual (generada 2026-07-10): `https://unlimited-expects-keith-solutions.trycloudflare.com`
 
 ## Seguridad — estado actual
 
