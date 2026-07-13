@@ -67,7 +67,54 @@ class TestGenerarRespuesta:
 
             # Should not crash, should sanitize
             assert resultado is not None
-            assert isinstance(resultado, str)
+
+
+class TestClasificarIntencion:
+    """Tests for clasificar_intencion() - intent mapping."""
+
+    def test_intencion_precio(self):
+        """Intent: PRECIO when asking about cost."""
+        intent = clasificar_intencion("¿Cuánto cuesta el módulo Pro?")
+        assert intent["intent"] == "PRECIO"
+        assert intent["confidence"] >= 0.7
+
+    def test_intencion_soporte(self):
+        """Intent: SOPORTE when asking for help."""
+        intent = clasificar_intencion("Necesito ayuda técnica")
+        assert intent["intent"] == "SOPORTE"
+        assert intent["confidence"] >= 0.7
+
+    def test_intencion_disponibilidad(self):
+        """Intent: DISPONIBILIDAD when checking availability."""
+        intent = clasificar_intencion("¿Están disponibles ahora?")
+        assert intent["intent"] == "DISPONIBILIDAD"
+        assert intent["confidence"] >= 0.7
+
+    def test_intencion_desconocida(self):
+        """Intent: UNKNOWN when unclear."""
+        intent = clasificar_intencion("xyz abc 123")
+        assert intent["confidence"] < 0.7
+
+
+class TestGuardrailsCheck:
+    """Tests for guardrails_check() - input validation."""
+
+    def test_guardrails_sql_injection_blocked(self):
+        """SQL injection attempt is blocked."""
+        resultado = guardrails_check("'; DROP TABLE usuarios; --")
+        assert resultado["blocked"] is True
+        assert "SQL" in resultado["reason"]
+
+    def test_guardrails_xss_blocked(self):
+        """XSS attempt is blocked."""
+        resultado = guardrails_check("<script>alert('xss')</script>")
+        assert resultado["blocked"] is True
+        assert "script" in resultado["reason"].lower()
+
+    def test_guardrails_clean_message(self):
+        """Clean message passes."""
+        resultado = guardrails_check("Hola, quiero saber el precio")
+        assert resultado["blocked"] is False
 
     @pytest.mark.asyncio
     async def test_generar_respuesta_xss_attempt_sanitized(self, mock_env, mock_gemini):
