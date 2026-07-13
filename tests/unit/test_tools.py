@@ -25,6 +25,7 @@ class TestConsultarPrecioModulo:
         assert "error" in resultado or resultado is None or isinstance(resultado, dict)
 
 
+
 class TestConsultarLicencia:
     """Tests for license queries."""
 
@@ -39,6 +40,7 @@ class TestConsultarLicencia:
         """Query non-existent license."""
         resultado = consultar_licencia("99999999999")
         assert resultado is not None
+
 
 
 class TestAgendarCita:
@@ -90,6 +92,16 @@ class TestReclasificarCaso:
         )
         if resultado:
             assert "puede_procesar" in resultado or "estado" in resultado or len(resultado) > 0
+
+    def test_reclasificar_caso_con_nombre_vacio(self):
+        """Reclassification with empty name."""
+        resultado = reclasificar_caso_sin_licencia(
+            caso_id="CASO-002",
+            telefono="34912345678",
+            nombre=""
+        )
+        assert isinstance(resultado, dict)
+
 
 
 class TestEscalarAHumano:
