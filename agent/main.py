@@ -1,4 +1,7 @@
 import asyncio
+import hmac
+import hashlib
+import json
 import logging
 import os
 from contextlib import asynccontextmanager
@@ -103,6 +106,31 @@ async def root():
     return {"status": "SysBot activo"}
 
 
+def validar_firma_meta(body: str, signature: str | None, verify_token: str) -> bool:
+    """Validate Meta webhook signature (HMAC-SHA256).
+
+    AC-4 Security: Reject unauthorized requests.
+    """
+    if not signature:
+        return False
+
+    try:
+        # Expected format: sha256=<hex>
+        algo, sig_hash = signature.split("=", 1)
+        if algo != "sha256":
+            return False
+
+        expected_hash = hmac.new(
+            verify_token.encode(),
+            body.encode() if isinstance(body, str) else body,
+            hashlib.sha256
+        ).hexdigest()
+
+        return hmac.compare_digest(sig_hash, expected_hash)
+    except (ValueError, AttributeError):
+        return False
+
+
 @app.get("/webhook")
 async def verificar_webhook(request: Request):
     challenge = proveedor.validar_webhook(dict(request.query_params))
@@ -152,7 +180,11 @@ async def recibir_webhook(request: Request):
         return {"status": "conectado"}
 
     historial = await obtener_historial(mensaje.telefono)
-    respuesta = await generar_respuesta(mensaje.telefono, mensaje.texto, historial)
+    respuesta = await generar_respuesta(
+        mensaje=mensaje.texto,
+        telefono=mensaje.telefono,
+        historial=historial
+    )
 
     await guardar_mensaje(mensaje.telefono, "user", mensaje.texto)
     await guardar_mensaje(mensaje.telefono, "assistant", respuesta)
