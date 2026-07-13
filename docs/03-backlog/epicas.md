@@ -1,11 +1,11 @@
 # Épicas: DemoWhatsappAgent
 
 **Fuente:** DemoWhatsappAgent-PRD.md  
-**Fecha:** 2026-07-12  
-**FASE 1 DEMO (v1.0) — FINAL:**  
-- **Épicas Activas:** EP-001 (14 HU), EP-002 (1 HU), EP-005 (2 HU)
-- **Total v1.0:** 17 HU
-- **Deferred v1.1+:** EP-003 (Security), EP-004 (RAG)
+**Fecha:** 2026-07-14  
+**FASE 1 DEMO (v1.0) — UPDATED:**  
+- **Épicas v1.0:** EP-001 (14 HU, archivada), EP-002 (1 HU, archivada), EP-003-MINI (4 HU, nueva), EP-005-MINI (5 HU, nueva)
+- **Total v1.0:** 24 HU (15 archivadas + 9 nuevas)
+- **Eliminadas:** EP-004 (RAG, indefinidamente deferred)
 - **Línea de base:** Grafo de dependencias (156 nodos, 5 comunidades, hub nodes identificados)
 
 ---
@@ -133,145 +133,85 @@ Reemplazar fallos silenciosos por recuperación graciosa, logging estructurado y
 
 ---
 
-## 🔄 DEFERRED A v1.1 (Fase 2+)
-
----
-
-## EP-003: Security Hardening (v1.1)
+## EP-003: Security Hardening — MINI (v1.0)
 
 ### Propósito Ejecutivo
 
-Proteger el sistema de ataques (rate limiting, input validation, audit logging) y asegurar que datos sensibles (tokens, credenciales) no se loguean ni se exponen.
+Proteger el demo de ataques obvios (rate limiting, input validation) y asegurar audit trail de decisiones críticas. **MINI scope:** Solo lo crítico para demo segura, sin encryption at rest ni compliance full.
 
 ### Por Qué Existe
 
-- **Hub node sin audit:** `escalar_a_humano()` (degree 32) crea case + email sin trail de quién/qué/cuándo
-- **Entry point sin defensa:** `recibir_webhook()` (degree 28) valida firma Meta pero no rate limits
-- **Datos sensibles sin protección:** Chat history en Postgres sin encriptación, tokens en filesystem
-- **Blocker de Producción:** No se deploya sin al menos:
-  - Rate limiting en webhook
-  - Input validation en webhook
-  - Audit logging en high-stakes tools
-  - No exponemos secretos en logs/errors
+- **Blocker de Demo:** Demo sin protección = vulnerable a DDoS obvios y log leaks
+- **Audit Trail:** Decisiones críticas (escalar, agendar, licencia) deben loguear quién/qué/cuándo
+- **Secretos en Logs:** CRITICAL — tokens no deben exponerse en exception logs
+- **Timing:** v1.0 demo, no v1.1 (decidido 2026-07-14)
 
 ### Objetivos PRD que Atiende
 
-- ✅ Objetivo 3: Validar elegibilidad de licencias (audit logging en `consultar_licencia()`)
-- ✅ Objetivo 4: Funcionar seguro 24/7 (protegido de ataques)
-- ✅ Restricción v1: Mínimo security (no es full compliance, pero lo básico)
+- ✅ Objetivo 3: Audit logging en `consultar_licencia()` para rastrabilidad
+- ✅ Objetivo 4: Funcionar seguro 24/7 (protegido de ataques obvios)
+- ✅ Restricción v1: Mínimo security para demo (no full compliance)
 
-### Capabilities Incluidas
+### Capabilities Incluidas (MINI)
 
-- **Nivel 4 (Backend):** Validación, rate limiting, audit logging
+- **Nivel 4 (Backend):** Rate limiting, input validation, audit logging, secrets scrubbing
 - **Especialmente:**
-  - `main.py::recibir_webhook()`: Rate limiting por IP + por user
-  - `main.py` + `brain.py`: Input sanitization (remove SQL, scripts, etc.)
-  - `tools.py` (high-stakes): Audit logging (user, tool, timestamp, result)
-    - `escalar_a_humano()` ← especialmente
+  - `main.py::recibir_webhook()`: Rate limiting 10 req/min per IP (HU-030)
+  - `main.py` + `brain.py`: Input sanitization (remove SQL, scripts) (HU-031)
+  - `tools.py` (high-stakes): Audit logging (user, tool, timestamp, result) (HU-032)
+    - `escalar_a_humano()`
     - `agendar_cita()`
     - `reclasificar_caso_sin_licencia()`
     - `consultar_licencia()`
-  - `memory.py`: Chat history encryption at rest (simple: AES-256 + master key)
-  - Logging: Scrubbing de tokens (DATABASE_URL, GOOGLE_*, META_*)
+  - Logging: Scrubbing de tokens en exception handlers (HU-033) — **CRITICAL fix**
+
+### Excluido (Diferir v1.1)
+
+- ❌ Chat history encryption at rest (DB ya local)
+- ❌ mTLS entre servicios (no aplica demo monolítica)
+- ❌ Full compliance audit (SOC2, GDPR, etc.)
+- ❌ Rate limiting multi-tier (solo per-IP por ahora)
 
 ### Cómo se Mide Éxito
 
 | Métrica | Target | Método |
 |---------|--------|--------|
-| Rate limiting enforced | ≥3 tiers (global, per-IP, per-user) | Load test + logs |
-| Input validation coverage | 100% (webhook + tools) | Code review + security test |
-| Secrets in logs | 0 occurrences | Log scanning (grep -i password, token, key) |
-| Audit trail completeness | 100% (high-stakes tools) | DB audit table + logs |
-| Test: SQL injection attempt | Blocked | Security test |
-| Test: XSS attempt | Blocked | Security test |
-| Test: Rate limit bypass | Failed | Load test |
+| Rate limiting enforced | 10 req/min/IP blocked | Load test + logs |
+| Input validation coverage | 100% (webhook + tools) | Security test |
+| Secrets in logs | 0 occurrences | Log scanning + CI gate |
+| Audit trail completeness | 100% (4 high-stakes tools) | DB audit table queries |
+| Tests passing | ≥90% | CI/CD |
+| SAST | 0 new CRITICAL | GitHub scanning |
 
 ### Artefactos Esperados
 
-- `agent/middleware/rate_limiter.py` (token bucket o sliding window)
-- `agent/middleware/input_validator.py` (sanitization rules)
-- `agent/middleware/audit_logger.py` (structured logging to DB)
-- Updated `tools.py` (audit log calls en escalar, agendar, reclasificar, consultar_licencia)
-- `agent/middleware/secrets_scrubber.py` (logging filter)
-- `agent/security/encryption.py` (AES-256 para chat history)
+- `agent/middleware/rate_limiter.py` (10 req/min per IP)
+- Updated `main.py` (apply rate limiter + input validation)
+- Updated `tools.py` (audit log calls en 4 tools)
+- Updated `agent/middleware/logging.py` (fix exception logging secrets leak)
 - Security tests: `tests/security/test_rate_limiting.py`, `test_input_validation.py`, `test_secrets.py`
-- Runbook: "Incident response si rate limiting falla"
+- Runbook: "If rate limit fails: enable fallback in NocoDB"
+
+### Historias
+
+- HU-030: Rate limiting webhook (4h)
+- HU-031: Input validation (3h)
+- HU-032: Audit logging (6h)
+- HU-033: Secrets scrubbing (2h) ← **CRITICAL GAP-EP002-3 fix**
 
 ### Layer
 
-**Foundational** — Necesario para v1.0 release.
+**Foundational** — Necesario para v1.0 demo robusta + segura.
 
-### Estimación (Rough)
+### Estimación
 
-- **Story Points:** 13 (2.5 semanas para 1 backend engineer)
-- **Complejidad:** Alta (múltiples capas de seguridad)
-
----
-
-## EP-004: RAG Backend (v1.1) (Knowledge Base)
-
-### Propósito Ejecutivo
-
-Implementar backend de búsqueda semántica para que la herramienta `buscar_en_conocimiento()` funcione. Hoy es un stub desconectado. Con RAG, bot puede responder preguntas complejas sobre productos/servicios sin tener que hard-code.
-
-### Por Qué Existe
-
-- **Capability desconectada:** `consultar_precio_modulo()` funciona, pero `buscar_en_conocimiento()` es un stub (no tiene backend)
-- **Blocker de Valor:** Usuarios B2B harán preguntas tipo "¿Qué incluye el módulo X?" o "¿Cuál es la diferencia entre plan A y B?" — hoy no hay forma de responder
-- **Mejora de Conversión:** RAG permite respuestas más ricas → mejor lead nurturing
-- **Mejora de Soporte:** Usuarios pueden auto-resolver con FAQ embeddeadas
-
-### Objetivos PRD que Atiende
-
-- ✅ Objetivo 1: Responder consultas comerciales al instante (con contexto, no solo tablas)
-- ✅ KPI: Conversión 25% (mejor si respondemos preguntas profundas)
-
-### Capabilities Incluidas
-
-- **Nivel 1 (Comercial):** `buscar_en_conocimiento()` con backend real
-- **Infraestructura:**
-  - Vector store: Pinecone, Weaviate o pgvector (Postgres local)
-  - Embeddings: OpenAI, Gemini o local (all-MiniLM)
-  - Chunking strategy: Recursive text splitter (1000 tokens, 200 overlap)
-  - Retrieval: Top-K (k=3-5), similarity threshold > 0.7
-
-### Cómo se Mide Éxito
-
-| Métrica | Target | Método |
-|---------|--------|--------|
-| Recall (relevant docs found) | ≥80% | Manual evaluation set |
-| Precision (top-3 are relevant) | ≥70% | Manual evaluation set |
-| Query latency | <500ms | APM instrumentation |
-| Embedding quality | Cosine similarity > 0.8 for duplicate questions | Semantic similarity tests |
-| End-to-end test | "¿Qué incluye módulo X?" → correcta respuesta | Integration test |
-
-### Artefactos Esperados
-
-- `agent/rag/embeddings.py` (wrapper para embeddings)
-- `agent/rag/vector_store.py` (interface para Pinecone/Weaviate/pgvector)
-- `agent/rag/retriever.py` (search + ranking)
-- `agent/rag/chunker.py` (recursive text splitter)
-- Knowledge base seed data: `data/knowledge_base/*.md` (FAQ, product specs, etc.)
-- Ingestion script: `scripts/ingest_knowledge.py` (populate vector store)
-- Tests: `tests/integration/test_rag_retrieval.py`, `test_embedding_quality.py`
-- Evaluation set: `data/rag_eval_set.jsonl` (Q&A pairs para testing)
-
-### Layer
-
-**Business** — Mejora UX pero no es blocker crítico de v1.0. Puede diferirse a v1.1.
-
-### Estimación (Rough)
-
-- **Story Points:** 13 (2.5-3 semanas para 1 backend engineer)
-- **Complejidad:** Media-Alta (requiere experiencia con RAG)
-
-### Nota
-
-Si no entra en Fase 1, pasa a EP-001-v1.1.
+- **Story Points:** 5 (mini scope)
+- **Esfuerzo:** ~15 horas (~2 días backend + QA)
+- **Complejidad:** Media (patrones estándar, solo 4 HU)
 
 ---
 
-## EP-005: Production Deployment
+## EP-005-MINI: Production Deployment Stack
 
 ### Propósito Ejecutivo
 
@@ -335,30 +275,30 @@ Puede separarse en:
 
 ---
 
-## Matriz de Cobertura: Épicas × Objetivos PRD
+## Matriz de Cobertura: Épicas × Objetivos PRD (v1.0)
 
-| Objetivo PRD | EP-001 | EP-002 | EP-003 | EP-004 | EP-005 | Cobertura |
-|--------------|--------|--------|--------|--------|--------|-----------|
-| 1. Responder consultas comerciales | ✓ | ✓ | ✓ | **✓** | ✓ | 100% |
-| 2. Escalar casos soporte | ✓ | **✓** | **✓** | | ✓ | 100% |
-| 3. Validar licencias | ✓ | ✓ | ✓ | | ✓ | 100% |
-| 4. Funcionar 24/7 | ✓ | **✓** | **✓** | | **✓** | 100% |
-| 5. Recolectar leads | | | | **✓** | ✓ | 100% |
+| Objetivo PRD | EP-001 | EP-002 | EP-003-MINI | EP-005-MINI | Cobertura |
+|--------------|--------|--------|---------|--------|-----------|
+| 1. Responder consultas comerciales | ✓ | ✓ | | ✓ | 100% |
+| 2. Escalar casos soporte | ✓ | **✓** | **✓** | ✓ | 100% |
+| 3. Validar licencias | ✓ | ✓ | **✓** | ✓ | 100% |
+| 4. Funcionar 24/7 seguro | ✓ | **✓** | **✓** | **✓** | 100% |
+| 5. Recolectar leads | | | | ✓ | 100% |
 
-**Leyenda:** `✓` = atendido incidentalmente, `**✓**` = atendido directamente
+**Leyenda:** `✓` = atendido incidentalmente, `**✓**` = atendido directamente  
+**Nota:** EP-004 (RAG) eliminada. Puede re-introducirse en v1.1 si request
 
 ---
 
-## Matriz de Cobertura: Épicas × KPIs
+## Matriz de Cobertura: Épicas × KPIs (v1.0)
 
-| KPI | EP-001 | EP-002 | EP-003 | EP-004 | EP-005 |
-|-----|--------|--------|--------|--------|--------|
-| Cobertura 40% | ✓ | | | ✓ | |
-| Velocidad <30s | ✓ | ✓ | | ✓ | |
-| Conversión 25% | | | | ✓ | |
-| Uptime 99% | | ✓ | | | ✓ |
-| Test coverage 60% | ✓ | | | | |
-| Error rate <1% | | ✓ | | | |
+| KPI | EP-001 | EP-002 | EP-003-MINI | EP-005-MINI | Status |
+|-----|--------|--------|---------|--------|--------|
+| Test coverage ≥60% | ✓ | | | | 🟡 In progress (60.39%) |
+| Error rate <1% | | ✓ | **✓** | ✓ | 🚀 New (EP-003-MINI) |
+| Velocidad <30s | ✓ | ✓ | | ✓ | ✓ Archivada |
+| Uptime 99% | | ✓ | | **✓** | 🚀 New (EP-005) |
+| Conversión 25% | | | | ✓ | 🟡 Deferred (leads capture) |
 
 ---
 
@@ -382,43 +322,55 @@ Puede separarse en:
 
 ---
 
-## Orden de Ejecución (Recomendado)
+## Orden de Ejecución (v1.0 DEMO)
 
-### Fase 1A: Cimientos (4 semanas)
+### Fase 1: Cimientos + Demo v1.0 (~1-2 semanas)
 
-1. **EP-001** (Test Suite) — Blocker de todo lo demás
-2. **EP-002** (Error Handling) — Depende de tests para validar
-3. **EP-003** (Security) — Depende de tests + error handling
+1. ✅ **EP-001** (Test Suite Foundation) — Archivada. Gaps documentados en GAPS_EP001_EP002_AUDIT.md
+2. ✅ **EP-002** (Error Handling & Resilience) — Archivada. Gaps + 3 CRITICAL fixes documentados
+3. 🚀 **EP-003-MINI** (Security Hardening Demo) — 4 HU nuevas, 2 días. Reemplaza v1.1, entra en v1.0
+4. 🚀 **EP-005-MINI** (Deployment Stack) — Docker + CI/CD + health checks, 3-4 días
 
-### Fase 1B: Valor (2-3 semanas, paralelo a 1A si recursos)
+### Parallelization Options
 
-4. **EP-004** (RAG Backend) — Independiente de EP-001-003
-
-### Fase 2: Release (1-2 semanas)
-
-5. **EP-005** (Production Deployment) — Depende de EP-001-003 completadas
-
----
-
-## Notas de Planificación
-
-- **Dependency:** EP-001 es blocker hard de todo. No avanzar sin test coverage ≥60%.
-- **Parallelism:** EP-004 (RAG) puede correr en paralelo con EP-001-003 si hay recursos.
-- **Timing:** Fase 1 (5 épicas) = ~6 semanas, 5 FTE (Tech Lead + Backend x2 + QA + DevOps part-time).
-- **Scope:** Estas 5 épicas cubren v1.0 completa. Todo lo demás (multi-channel, Salesforce, etc.) es v1.1+.
+- **Option A (Fastest):** EP-001/002 fixes + EP-003-MINI → Laptop demo (Hoy → Mañana)
+- **Option B (Staging):** Anterior + EP-005-MINI deployment → Cloud demo (Next 3-4 days)
+- **Option C (Production):** Anterior + lead capture + config UI → Full KPIs demo (2 weeks)
 
 ---
 
-## Próximo Paso
+## Notas de Planificación (v1.0 DEMO)
 
-**Opción A:** `/factory:historia` — Empezar a escribir historias de usuario de EP-001  
-**Opción B:** `/factory:mapa` — Primero visualizar journey end-to-end (Jeff Patton)  
-**Opción C:** `/factory:revisar` — Auditar cobertura de épicas vs. PRD  
-
-**Recomendación:** Opción B → A (User Story Map → Historias).
+- **Dependency:** EP-001/002 ya archivadas. Gaps documentados, requieren fixes (~2-3 días).
+- **EP-003-MINI:** 4 HU nuevas, 2 días. Reemplaza v1.1 full scope.
+- **EP-005-MINI:** 3-4 días (Docker + CI/CD + health checks).
+- **Timing:** Laptop demo hoy → Mañana PM (con fixes rápidos EP-002). Staging demo 3-4 días. Full demo 2 semanas.
+- **Team:** 2 backend engineers (fixes + EP-003/005), 1 QA (security tests).
+- **Scope:** EP-001 + EP-002 + EP-003-MINI + EP-005-MINI = v1.0 demo. EP-004 (RAG) eliminada, puede re-introducirse.
 
 ---
 
-**Documento generado:** 2026-07-12  
-**Revisor asignado:** (pendiente)  
-**Estado:** Draft (listo para `/factory:revisar`)
+## Próximos Pasos (v1.0 DEMO Execution)
+
+### Paso 1: Planificar Correcciones (Today)
+- Documentar gaps EP-001/002 → **DONE:** GAPS_EP001_EP002_AUDIT.md
+- Planificar fixes por severidad (GAP-EP002-3 first, CRITICAL)
+- Crear plan de desarrollo EP-003-MINI + EP-005-MINI
+
+### Paso 2: Ejecutar Fixes + EP-003-MINI (Next 2-4 days)
+- Fix EP-001 GAP-001-3 (timeout Gemini) — 4h
+- Fix EP-002 GAP-{1,2,3} (retry, circuit, secrets) — 8h
+- Build EP-003-MINI HU-030/031/032/033 — 15h
+- QA security tests — 4h
+
+### Paso 3: Deploy + Demo (Next week or 2 weeks)
+- Optional: EP-005-MINI deployment stack (3-4 days)
+- Staging demo + KPIs measurement
+- Customer-facing demo (full production-grade)
+
+---
+
+**Documento actualizado:** 2026-07-14  
+**Estado:** Active — Lista para ejecución  
+**Owner:** IngKevin95  
+**Auditoría Factory:** Completa (3 agentes, hallazgos documentados)

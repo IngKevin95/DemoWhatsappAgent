@@ -273,7 +273,7 @@ DemoWhatsappAgent (FastAPI)
 
 ---
 
-## 5.3. Criterios de Aceptación (Nivel Producto)
+## 5.4. Criterios de Aceptación (Nivel Producto)
 
 Checklist de verificación post-release:
 
