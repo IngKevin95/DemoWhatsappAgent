@@ -54,9 +54,9 @@ BAJO VALOR
 ## Resumen por Cuadrante (17 HU — Fase 1 Demo SOLO)
 
 ### 🟢 Quick Wins (Hacer Primero)
-**9 historias** — Alto valor, bajo esfuerzo
+**10 historias** — Alto valor, bajo esfuerzo
 
-Incluye: HU-001, 003, 004, 005, 006, 011b, 014, 024, 025
+Incluye: HU-001, 003, 004, 005, 006, 011b, 012, 014, 024, 025
 
 **Costo:** ~18-20 story points  
 **Beneficio:** Bienvenida, consultas, disponibilidad, cierre
@@ -70,9 +70,9 @@ Incluye: HU-002, 011a, 015
 **Beneficio:** Intent routing + agendar + escalación (cierra Fase 1 Demo)
 
 ### 🟡 Fill-ins (Hacer Después si Tiempo)
-**5 historias** — Valor medio, esfuerzo medio
+**4 historias** — Valor medio, esfuerzo medio
 
-Incluye: HU-007, 012, 013, 019, 021, 022
+Incluye: HU-007, 013, 019, 021
 
 **Costo:** ~10-12 story points  
 **Beneficio:** Licencias, comparativa, registro, triaje, notificaciones
@@ -114,6 +114,21 @@ Incluye: HU-007, 012, 013, 019, 021, 022
 
 ---
 
+### Sprint 3 (2 semanas) — Fill-ins
+**Objetivo:** Comparativa, registro, lead digest, detalles técnicos
+
+| Historias | Costo | Épica |
+|-----------|-------|-------|
+| HU-007 | 2 pts | EP-001 (comparar módulos) |
+| HU-013 | 2 pts | EP-001 (registrar cliente) |
+| HU-019 | 2 pts | EP-002 (reclasificación) |
+| HU-021 | 2 pts | EP-005 (lead digest daily) |
+| **Subtotal** | **8 pts** | **EP-001, EP-002, EP-005** |
+
+**Objetivo:** Completar cobertura de Fase 1 Demo. Opcional si tiempo limitado.
+
+---
+
 ## Ratios y Métricas (17 HU Fase 1 Demo v1.0)
 
 | Métrica | Valor |
@@ -122,9 +137,9 @@ Incluye: HU-007, 012, 013, 019, 021, 022
 | **Esfuerzo Promedio (1-5)** | 1.5 |
 | **Ratio Promedio (V/E)** | 2.85 |
 | **Story Points Totales** | ~24-26 pts |
-| **Quick Wins %** | 53% (9/17) |
+| **Quick Wins %** | 59% (10/17) |
 | **Strategic %** | 18% (3/17) |
-| **Fill-ins %** | 29% (5/17) |
+| **Fill-ins %** | 24% (4/17) |
 | **Coverage (Fase 1 Demo)** | 100% (17/17) |
 
 ---
