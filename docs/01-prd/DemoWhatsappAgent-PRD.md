@@ -72,7 +72,38 @@ DemoWhatsappAgent (FastAPI)
 
 ---
 
-## 3. Audiencia / Target User
+## 3. Objetivos (Goals SMART)
+
+### Objetivos de Negocio (v1.0 Demo)
+
+1. **Reducir turnaround de respuesta comercial**
+   - Métrica: Turnaround 24h (email hoy) → 30 segundos (bot)
+   - Target: 40% de consultas resueltas sin escalación humana
+   - Plazo: Semana 3 (Sprint 1 + 2)
+
+2. **Disponibilidad 24/7 sin operador**
+   - Métrica: Uptime 99%, respuesta <30s incluso fuera de horario
+   - Target: 0 leads perdidos por "no atender fuera de 9-17h"
+   - Plazo: Semana 4 (Sprint 1 + 2 + validación)
+
+3. **Automatizar triaje de soporte**
+   - Métrica: 50% de casos pre-categorizados automáticamente (comercial vs. soporte)
+   - Target: Reducir carga manual de triaje en 50%
+   - Plazo: Semana 4 (Sprint 2 con HU-019)
+
+4. **Capturar leads con contexto**
+   - Métrica: 100% de leads que consultaron quedan registrados (hoy: manual, pierde 40%)
+   - Target: Comercial recibe daily digest con historial de preguntas
+   - Plazo: Semana 4 (Sprint 2 con HU-021)
+
+5. **Validar elegibilidad de licencias en tiempo real**
+   - Métrica: 100% de consultas de licencia respondidas sin call a Firebird manual
+   - Target: 0 escalaciones por "no sé si tengo soporte vigente"
+   - Plazo: Semana 2 (Sprint 1 con HU-012/014)
+
+---
+
+## 3.1. Audiencia / Target User
 
 ### Usuarios Finales PRIMARIOS (3 capas)
 
@@ -172,7 +203,53 @@ DemoWhatsappAgent (FastAPI)
 
 ---
 
-## 5.2. Diseño y Experiencia de Usuario (UX)
+## 5.2. Casos de Uso (UC)
+
+### UC-001: Cliente Consulta Precio Fuera de Horas
+**Rol:** Cliente B2B externo  
+**Escenario:** Sábado 20:30, necesita saber cuánto cuesta módulo X antes de reunion lunes  
+**Flujo:**
+1. Usuario envía "¿Cuánto cuesta el módulo Premium?"
+2. Bot (Gemini) reconoce intención: `consultar_precio(modulo="Premium")`
+3. Bot devuelve "$500/mes, 5 usuarios incluidos"
+4. Usuario decide sin esperar email
+
+### UC-002: Soporte Recibe Escalación con Contexto
+**Rol:** Equipo Soporte interno  
+**Escenario:** Usuario reporta "No puedo hacer login", bot escala  
+**Flujo:**
+1. Bot detecta intención soporte, crea ticket EspoCRM
+2. Bot adjunta historial (qué preguntó antes, cuándo se registró)
+3. Soporte abre ticket, ve contexto, responde en <10min (vs. hoy: leyendo emails, 2h)
+
+### UC-003: Comercial Sigue Lead que Consultó Ayer
+**Rol:** Equipo Comercial interno  
+**Escenario:** Lunes mañana, revisar leads de fin de semana  
+**Flujo:**
+1. Comercial recibe daily digest: "3 leads nuevos ayer"
+2. Abre lead #1: "Preguntó por módulo Enterprise, disponibilidad demo"
+3. Comercial contacta directo (sin perder contexto), cierra en 24h (vs. hoy: 3+ días)
+
+### UC-004: Usuario Valida Elegibilidad de Licencia
+**Rol:** Cliente con licencia vigente o expirada  
+**Escenario:** Usuario intenta acceder a feature, no sabe si tiene soporte  
+**Flujo:**
+1. Usuario pregunta "¿Puedo agendar demo si mi licencia vence el 15/7?"
+2. Bot (sin intervención humana) consulta Firebird: "Licencia vigente, soporte hasta 15/7"
+3. Bot responde con módulos accesibles + aviso "Renovar antes de 15/7"
+
+### UC-005: Usuario Agenda Demo sin Formulario
+**Rol:** Cliente B2B, decisor técnico  
+**Escenario:** Conversación natural, user dice "Quiero ver cómo funciona el módulo X"  
+**Flujo:**
+1. User: "¿Puedo agendar una demo del módulo Enterprise?"
+2. Bot: "Claro, te muestro slots disponibles. ¿Preferís hoy 15:00 o mañana 10:00?"
+3. User: "Mañana 10:00"
+4. Bot: "Listo, evento creado. Te llega email con link Zoom + contexto de tu consulta"
+
+---
+
+## 5.3. Diseño y Experiencia de Usuario (UX)
 
 ### Principios de Diseño
 
