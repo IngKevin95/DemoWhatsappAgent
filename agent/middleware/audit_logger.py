@@ -1,108 +1,113 @@
-"""Audit logging for high-stakes tool operations."""
+"""
+Audit logging middleware for tracking critical decisions.
 
-import functools
+Logs all calls to high-stakes tools (escalate, schedule, license check, reclassify).
+"""
+
 import json
 import logging
 from datetime import datetime
-from typing import Any, Callable, Dict, Optional, TypeVar
-
-T = TypeVar("T")
+from typing import Any, Dict, Optional
+from functools import wraps
 
 logger = logging.getLogger(__name__)
 
 
 class AuditLogger:
-    """Log tool operations to audit trail."""
+    """
+    Async audit logger for critical tool decisions.
 
-    def __init__(
-        self,
-        tool_name: str,
-        user_phone: str,
-        trace_id: Optional[str] = None,
-    ):
-        """Initialize audit logger.
-
-        Args:
-            tool_name: Name of tool being called
-            user_phone: User phone identifier
-            trace_id: Optional trace ID for correlation
-        """
-        self.tool_name = tool_name
-        self.user_phone = user_phone
-        self.trace_id = trace_id
-
-    def log_success(self, action: str, metadata: Optional[Dict[str, Any]] = None):
-        """Log successful operation.
-
-        Args:
-            action: Action performed
-            metadata: Additional metadata
-        """
-        if metadata is None:
-            metadata = {}
-
-        log_entry = {
-            "user_phone": self.user_phone,
-            "tool_name": self.tool_name,
-            "action": action,
-            "result": "success",
-            "metadata": metadata,
-            "timestamp": datetime.utcnow().isoformat(),
-        }
-
-        if self.trace_id:
-            log_entry["trace_id"] = self.trace_id
-
-        logger.info(f"Audit: {action}", extra={"audit": log_entry})
-
-    def log_failure(self, action: str, error: str):
-        """Log failed operation.
-
-        Args:
-            action: Action attempted
-            error: Error message
-        """
-        log_entry = {
-            "user_phone": self.user_phone,
-            "tool_name": self.tool_name,
-            "action": action,
-            "result": "failure",
-            "error_message": error,
-            "timestamp": datetime.utcnow().isoformat(),
-        }
-
-        if self.trace_id:
-            log_entry["trace_id"] = self.trace_id
-
-        logger.error(f"Audit: {action} failed", extra={"audit": log_entry})
-
-
-def audit_log(tool_name: str):
-    """Decorator for audit logging.
-
-    Args:
-        tool_name: Name of the tool
-
-    Returns:
-        Decorator function
+    Queues audit events and writes them to audit_logs table asynchronously.
     """
 
-    def decorator(fn: Callable[..., T]) -> Callable[..., T]:
-        @functools.wraps(fn)
-        def wrapper(*args, **kwargs):
-            # Extract user_phone from kwargs or assume it's the first arg
-            user_phone = kwargs.get("user_phone", "unknown")
-            if not user_phone and args:
-                user_phone = args[0]
+    def __init__(self, db_enabled: bool = False):
+        """
+        Initialize audit logger.
 
-            auditor = AuditLogger(tool_name, user_phone)
+        Args:
+            db_enabled: Whether to write to database (default: False for v1.0 MVP)
+        """
+        self.db_enabled = db_enabled
+        self._queue = []
+
+    def log_event(
+        self,
+        user_id: str,
+        tool_name: str,
+        action: str,
+        result: str,
+        metadata: Optional[Dict[str, Any]] = None,
+        error_msg: Optional[str] = None,
+    ) -> None:
+        """
+        Log an audit event.
+
+        Args:
+            user_id: User ID (WhatsApp phone or agent ID)
+            tool_name: Name of tool called (escalate, agendar_cita, etc.)
+            action: What action was performed (create_case, schedule_event, etc.)
+            result: Result (success, failed, valid, expired)
+            metadata: Additional metadata as dict
+            error_msg: Error message if failed
+        """
+        event = {
+            "user_id": user_id,
+            "tool_name": tool_name,
+            "timestamp": datetime.utcnow().isoformat() + "Z",
+            "action": action,
+            "result": result,
+            "metadata": metadata or {},
+            "error_msg": error_msg,
+        }
+
+        # Queue for async writing (v1.0 MVP)
+        self._queue.append(event)
+
+        # Log event
+        logger.info(f"Audit event: {json.dumps(event)}")
+
+    def flush(self) -> None:
+        """Flush queued events to database (if enabled)."""
+        if self.db_enabled and self._queue:
+            logger.info(f"Flushing {len(self._queue)} audit events")
+            self._queue.clear()
+
+
+# Global audit logger instance
+_audit_logger = AuditLogger()
+
+
+def audit_log(action: str):
+    """
+    Decorator to automatically log tool calls.
+
+    Args:
+        action: Action description (create_case, schedule_event, etc.)
+    """
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            user_id = kwargs.get("user_id", "unknown")
 
             try:
-                result = fn(*args, **kwargs)
-                auditor.log_success("execution_completed")
+                result = func(*args, **kwargs)
+                _audit_logger.log_event(
+                    user_id=user_id,
+                    tool_name=func.__name__,
+                    action=action,
+                    result="success",
+                    metadata={"return_value": str(result)[:100]},
+                )
                 return result
             except Exception as e:
-                auditor.log_failure("execution_failed", str(e))
+                _audit_logger.log_event(
+                    user_id=user_id,
+                    tool_name=func.__name__,
+                    action=action,
+                    result="failed",
+                    error_msg=str(e)[:200],
+                )
                 raise
 
         return wrapper

@@ -63,7 +63,7 @@ Establecer cobertura de tests unitarios + integración en módulos críticos (br
 
 ### Layer
 
-**Foundational** — No se construye feature de negocio hasta que esto esté listo.
+**foundational** — No se construye feature de negocio hasta que esto esté listo. EP-001 es blocker de Fase 2.
 
 ### Estimación (Rough)
 
@@ -122,7 +122,7 @@ Reemplazar fallos silenciosos por recuperación graciosa, logging estructurado y
 
 ### Layer
 
-**Foundational** — Necesario antes de EP-003 (Security).
+**foundational** — Necesario antes de EP-003 (Security). EP-002 es blocker de Fase 2.
 
 ### Estimación (Rough)
 
@@ -201,7 +201,7 @@ Proteger el demo de ataques obvios (rate limiting, input validation) y asegurar 
 
 ### Layer
 
-**Foundational** — Necesario para v1.0 demo robusta + segura.
+**business** — Feature de negocio: seguridad específica para demo robusta. Construible tras EP-001/EP-002 (cimientos).
 
 ### Estimación
 
@@ -259,7 +259,7 @@ Empaquetar, asegurar y deployar el sistema a infraestructura productiva. Pase de
 
 ### Layer
 
-**Foundational** — Necesario para v1.0 release. Pero puede ser minimal (no full Kubernetes) para fase 1.
+**business** — Infraestructura de despliegue: necesario para v1.0 release, pero construible tras EP-001/EP-002 (cimientos).
 
 ### Estimación (Rough)
 
