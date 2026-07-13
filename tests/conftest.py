@@ -98,6 +98,7 @@ def mock_env(monkeypatch):
         "META_API_TOKEN": "test_meta_token",
         "META_PHONE_NUMBER_ID": "123456789",
         "META_VERIFY_TOKEN": "test_verify_token",
+        "VERIFY_TOKEN": "test_verify_token",
         "DATABASE_URL": "postgresql://test:test@localhost/test_db",
         "FIREBIRD_HOST": "localhost",
         "ISC_PASSWORD": "test_firebird",
@@ -106,6 +107,17 @@ def mock_env(monkeypatch):
     for key, value in test_vars.items():
         monkeypatch.setenv(key, value)
     return test_vars
+
+
+@pytest.fixture
+def mock_proveedor():
+    """Mock the provider to avoid real API calls."""
+    mock = MagicMock()
+    mock.validar_firma = Mock(return_value=True)
+    mock.parsear_webhook = Mock(return_value=None)
+    mock.validar_webhook = Mock(return_value=None)
+    mock.enviar_mensaje = AsyncMock(return_value=None)
+    return mock
 
 
 @pytest.fixture
@@ -144,6 +156,15 @@ def sample_valid_signature():
 def patch_db_connections(monkeypatch):
     """Patch all DB connections to prevent real connections in tests."""
     from unittest.mock import patch, AsyncMock, MagicMock
+
+    # Patch SyncSession to prevent real DB connections
+    mock_session = MagicMock()
+    mock_session.query = MagicMock(return_value=MagicMock())
+    mock_session.__enter__ = MagicMock(return_value=mock_session)
+    mock_session.__exit__ = MagicMock(return_value=None)
+
+    monkeypatch.setattr("agent.db.SyncSession", MagicMock(return_value=mock_session))
+    monkeypatch.setattr("agent.tools.SyncSession", MagicMock(return_value=mock_session))
 
     # Patch memory.py async functions
     monkeypatch.setattr(

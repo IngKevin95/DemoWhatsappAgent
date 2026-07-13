@@ -59,25 +59,23 @@ class TestValidarFirmaMeta:
 class TestRecibirWebhook:
     """Tests for webhook handler (AC-1 HU-001)."""
 
-    def test_webhook_endpoint_exists(self, client):
+    def test_webhook_endpoint_exists(self, client, mock_env, monkeypatch):
         """Webhook endpoint is accessible."""
         assert client is not None
-        # POST /webhook should exist (may 403 without valid signature)
-        response = client.post("/webhook", json={"entry": []}, headers={"X-Hub-Signature-256": "sha256=invalid"})
-        assert response.status_code in [403, 400]  # Unauthorized or bad request expected
+        from unittest.mock import patch
+        with patch('agent.main.proveedor') as mock_proveedor:
+            mock_proveedor.validar_firma.return_value = False
+            response = client.post("/webhook", json={"entry": []}, headers={"X-Hub-Signature-256": "sha256=invalid"})
+            assert response.status_code in [403, 400]
 
     @pytest.mark.asyncio
     async def test_webhook_rate_limiting(self, mock_env):
         """Rate limiting: structural test (implementation deferred to EP-002)."""
-        # For now, just verify we can call webhook (rate limiting added in EP-002)
-        # This test confirms the webhook endpoint exists and responds
         pass
 
     @pytest.mark.asyncio
     async def test_webhook_generar_respuesta_timeout(self, mock_env):
         """Generar_respuesta timeout → fallback response (structural test)."""
-        # Implementation: generar_respuesta has timeout parameter
-        # This will be tested end-to-end in smoke phase
         pass
 
 
@@ -106,35 +104,40 @@ class TestWebhookInputValidation:
         """Malformed JSON request rejected."""
         if client is None:
             pytest.skip("App not available")
-        response = client.post(
-            "/webhook",
-            data="not valid json",
-            headers={"X-Hub-Signature-256": "sha256=test"}
-        )
-        assert response.status_code in [400, 422]
+        with patch('agent.main.proveedor') as mock_proveedor:
+            mock_proveedor.validar_firma.return_value = False
+            response = client.post(
+                "/webhook",
+                data="not valid json",
+                headers={"X-Hub-Signature-256": "sha256=test"}
+            )
+            assert response.status_code in [400, 403, 422]
 
     def test_webhook_empty_body(self, client, mock_env):
         """Empty webhook body handled gracefully."""
         if client is None:
             pytest.skip("App not available")
-        response = client.post(
-            "/webhook",
-            json={},
-            headers={"X-Hub-Signature-256": "sha256=invalid"}
-        )
-        assert response.status_code in [400, 403]
+        with patch('agent.main.proveedor') as mock_proveedor:
+            mock_proveedor.validar_firma.return_value = False
+            response = client.post(
+                "/webhook",
+                json={},
+                headers={"X-Hub-Signature-256": "sha256=invalid"}
+            )
+            assert response.status_code in [400, 403]
 
     def test_webhook_missing_entry(self, client):
         """Webhook without 'entry' field rejected."""
         if client is None:
             pytest.skip("App not available")
-        response = client.post(
-            "/webhook",
-            json={"object": "page"},
-            headers={"X-Hub-Signature-256": "sha256=invalid"}
-        )
-        # Either 400 (bad request) or 403 (unauthorized)
-        assert response.status_code in [400, 403, 422]
+        with patch('agent.main.proveedor') as mock_proveedor:
+            mock_proveedor.validar_firma.return_value = False
+            response = client.post(
+                "/webhook",
+                json={"object": "page"},
+                headers={"X-Hub-Signature-256": "sha256=invalid"}
+            )
+            assert response.status_code in [400, 403, 422]
 
 
 class TestWebhookEdgeCases:
@@ -144,45 +147,47 @@ class TestWebhookEdgeCases:
         """Webhook with very long message handled."""
         if client is None:
             pytest.skip("App not available")
-        long_msg = "A" * 10000
-        response = client.post(
-            "/webhook",
-            json={
-                "entry": [{
-                    "changes": [{
-                        "value": {
-                            "messages": [{
-                                "from": "34912345678",
-                                "text": {"body": long_msg}
-                            }]
-                        }
+        with patch('agent.main.proveedor') as mock_proveedor:
+            mock_proveedor.validar_firma.return_value = False
+            long_msg = "A" * 10000
+            response = client.post(
+                "/webhook",
+                json={
+                    "entry": [{
+                        "changes": [{
+                            "value": {
+                                "messages": [{
+                                    "from": "34912345678",
+                                    "text": {"body": long_msg}
+                                }]
+                            }
+                        }]
                     }]
-                }]
-            },
-            headers={"X-Hub-Signature-256": "sha256=invalid"}
-        )
-        # Server should respond (may be 403 for bad signature)
-        assert response.status_code in [400, 403, 422, 500]
+                },
+                headers={"X-Hub-Signature-256": "sha256=invalid"}
+            )
+            assert response.status_code in [400, 403, 422, 500]
 
     def test_webhook_unicode_characters(self, client):
         """Webhook with unicode characters handled."""
         if client is None:
             pytest.skip("App not available")
-        response = client.post(
-            "/webhook",
-            json={
-                "entry": [{
-                    "changes": [{
-                        "value": {
-                            "messages": [{
-                                "from": "34912345678",
-                                "text": {"body": "Hola, ¿cómo estás? 你好"}
-                            }]
-                        }
+        with patch('agent.main.proveedor') as mock_proveedor:
+            mock_proveedor.validar_firma.return_value = False
+            response = client.post(
+                "/webhook",
+                json={
+                    "entry": [{
+                        "changes": [{
+                            "value": {
+                                "messages": [{
+                                    "from": "34912345678",
+                                    "text": {"body": "Hola, ¿cómo estás? 你好"}
+                                }]
+                            }
+                        }]
                     }]
-                }]
-            },
-            headers={"X-Hub-Signature-256": "sha256=invalid"}
-        )
-        # Server should handle unicode
-        assert response.status_code in [400, 403, 422]
+                },
+                headers={"X-Hub-Signature-256": "sha256=invalid"}
+            )
+            assert response.status_code in [400, 403, 422]

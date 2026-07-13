@@ -14,3 +14,4 @@ firebird-driver
 pytest
 pytest-asyncio
 pytest-cov
+pybreaker
