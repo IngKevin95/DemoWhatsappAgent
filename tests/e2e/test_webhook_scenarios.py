@@ -31,7 +31,7 @@ class TestWebhookJourney:
 
     def test_webhook_welcome_flow(self, setup_env):
         """Happy path: user says hello → bot welcomes."""
-        with patch('agent.main.proveedor') as mock_proveedor:
+        with patch('agent.main.proveedor_meta') as mock_proveedor:
             mock_proveedor.validar_firma.return_value = True
             mock_proveedor.parsear_webhook.return_value = None
 

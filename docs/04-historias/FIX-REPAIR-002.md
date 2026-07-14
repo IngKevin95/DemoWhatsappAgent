@@ -1,16 +1,16 @@
 ---
 id: FIX-REPAIR-002
-titulo: Circuit Breaker en Gemini (EP-002-2)
+titulo: Circuit Breaker en LLM (EP-002-2), para cumplir requerimientos de negocio
 epica: EP-REPAIRS
 prioridad: MUST
 complejidad: 2
 estado: lista
 ---
 
-# FIX-REPAIR-002: Circuit Breaker Gemini
+# FIX-REPAIR-002: Circuit Breaker LLM
 
 ## AC-1: Decorator Aplicado
-**Given** `brain.py::generar_respuesta()` calls Gemini  
+**Given** `brain.py::generar_respuesta()` calls LLM  
 **When** circuit breaker trips (3+ failures in 30s)  
 **Then** decorator catches, returns fallback: "Disculpa, estoy ocupado. ¿Puedes reformular?"
 
@@ -25,7 +25,7 @@ estado: lista
 **Then** circuit breaker uses those values
 
 ## AC-4: Load Test
-**Given** Gemini API fails 10× consecutively  
+**Given** LLM API fails 10× consecutively  
 **When** load test runs  
 **Then** circuit breaker trips, fallback sent, conversación continues (no cascade)
 

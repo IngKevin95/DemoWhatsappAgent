@@ -20,7 +20,7 @@ def test_root_endpoint():
 @pytest.mark.asyncio
 async def test_enviar_mensaje_seguro():
     """enviar_mensaje_seguro handles errors gracefully."""
-    with patch('agent.main.proveedor') as mock_prov:
+    with patch('agent.main.proveedor_meta') as mock_prov:
         mock_prov.enviar_mensaje = AsyncMock(side_effect=Exception("API error"))
         # Should not raise, handles exception gracefully
         await enviar_mensaje_seguro("34912345678", "Test")

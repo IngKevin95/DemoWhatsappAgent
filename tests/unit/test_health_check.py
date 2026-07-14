@@ -6,6 +6,14 @@ from starlette.testclient import TestClient
 from agent.main import app, scrub_secrets, sanitize_input
 
 
+@pytest.fixture(autouse=True)
+def mock_health_probes(monkeypatch):
+    """Los probes tocan infra real; mockearlos para validar el contrato del
+    endpoint de forma determinista (no la conectividad real de la infra)."""
+    for probe in ("probe_postgres", "probe_gemini", "probe_espocrm", "probe_firebird"):
+        monkeypatch.setattr(f"agent.main.{probe}", AsyncMock(return_value="ok"))
+
+
 @pytest.fixture
 def client():
     """Fixture: FastAPI test client"""

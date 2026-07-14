@@ -131,7 +131,14 @@ async def correr_caso(caso: dict) -> tuple[bool, list[str]]:
                 session.delete(obj)
         session.commit()
 
+    # ponytail: pacing opcional para no reventar la cuota free-tier de Gemini
+    # (15 req/min en gemini-*-lite) al correr los 28 casos en ráfaga. Default 0.
+    import os as _os
+    pacing = float(_os.getenv("SCENARIO_PACING_SECONDS", "0"))
+
     for turno in caso["turnos"]:
+        if pacing:
+            await asyncio.sleep(pacing)
         historial = await obtener_historial(telefono)
         respuesta = await generar_respuesta(telefono, turno["usuario"], historial)
         await guardar_mensaje(telefono, "user", turno["usuario"])
