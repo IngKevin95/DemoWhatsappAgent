@@ -71,14 +71,17 @@ ALTER TABLE ONLY public.modulos ALTER COLUMN id SET DEFAULT nextval('public.modu
 -- contactos  (sin FK saliente — es la raíz de la cadena de personas)
 -- ---------------------------------------------------------------------------
 CREATE TABLE public.contactos (
-    telefono       character varying NOT NULL,
-    nombre         character varying NOT NULL,
-    empresa        character varying,
-    correo         character varying,
-    atendido_por   integer,                             -- FK -> agentes.id (abajo)
-    conectado_en   timestamp without time zone,
-    creado_en      timestamp without time zone DEFAULT now(),
-    actualizado_en timestamp without time zone DEFAULT now()
+    telefono             character varying NOT NULL,
+    nombre               character varying NOT NULL,
+    empresa              character varying,
+    correo               character varying,
+    ciudad               character varying,
+    atendido_por         integer,                             -- FK -> agentes.id (abajo)
+    conectado_en         timestamp without time zone,
+    consentimiento_datos boolean DEFAULT false,
+    canal                character varying DEFAULT 'meta',
+    creado_en            timestamp without time zone DEFAULT now(),
+    actualizado_en       timestamp without time zone DEFAULT now()
 );
 
 
