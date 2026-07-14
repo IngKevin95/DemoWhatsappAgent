@@ -96,6 +96,8 @@ class Contacto(Auditoria, Base):
     ciudad = Column(String, nullable=True)
     atendido_por = Column(Integer, ForeignKey("agentes.id"), nullable=True)
     conectado_en = Column(DateTime, nullable=True)
+    consentimiento_datos = Column(Boolean, default=False)
+    canal = Column(String, nullable=False, default="meta")
 
 
 class Cliente(Auditoria, Base):
@@ -128,6 +130,18 @@ class Radicado(Auditoria, Base):
     modo = Column(String, nullable=True)  # conectado | notificacion_con_contacto | notificacion
     email_enviado = Column(Boolean, default=False)
     crm_case_id = Column(String, nullable=True)
+
+
+class Conversacion(Auditoria, Base):
+    """Agrupa mensajes de un mismo contacto. Si se escala, se liga a un Radicado."""
+    __tablename__ = "conversaciones"
+
+    id = Column(Integer, primary_key=True)
+    telefono = Column(String, ForeignKey("contactos.telefono"), nullable=False)
+    radicado_id = Column(Integer, ForeignKey("radicados.id"), nullable=True)
+    estado = Column(String, nullable=False, default="abierta")  # abierta | cerrada
+    tipo_solicitud = Column(String, nullable=True)
+    motivo_cierre = Column(String, nullable=True)  # usuario | inactividad
 
 
 class ColaEspera(Auditoria, Base):
