@@ -1,4 +1,5 @@
 import os
+import re
 from datetime import datetime, timedelta
 from functools import lru_cache
 
@@ -8,6 +9,10 @@ from agent.utilities.retry import retry
 BASE_URL = os.getenv("ESPOCRM_URL", "http://espocrm")
 API_KEY = os.getenv("ESPOCRM_API_KEY", "")
 TIMEOUT = 5.0
+
+# EspoCRM valida emailAddress estricto: un valor mal formado (lo que a veces
+# extrae el LLM) hace 400 y tumba la creación del lead. Se omite si no es válido.
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 def _headers() -> dict:
@@ -34,9 +39,11 @@ def crear_lead(nombre: str, telefono: str, empresa: str, correo: str, interes: s
         "lastName": nombre,
         "phoneNumber": _e164(telefono),
         "accountName": empresa,
-        "emailAddress": correo,
         "description": interes,
     }
+    # Solo enviar email si es un email válido; EspoCRM rechaza (400) uno mal formado.
+    if correo and _EMAIL_RE.match(correo.strip()):
+        body["emailAddress"] = correo.strip()
     r = httpx.post(f"{BASE_URL}/api/v1/Lead", json=body, headers=_headers(), timeout=TIMEOUT)
     r.raise_for_status()
     return r.json()
