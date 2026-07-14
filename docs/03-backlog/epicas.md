@@ -144,7 +144,7 @@ Proteger el demo de ataques obvios (rate limiting, input validation) y asegurar 
 - **Blocker de Demo:** Demo sin protección = vulnerable a DDoS obvios y log leaks
 - **Audit Trail:** Decisiones críticas (escalar, agendar, licencia) deben loguear quién/qué/cuándo
 - **Secretos en Logs:** CRITICAL — tokens no deben exponerse en exception logs
-- **Timing:** v1.0 demo, no v1.1 (decidido 2026-07-14)
+- **Timing:** v1.0 demo, no Fase 2 (decidido 2026-07-14)
 
 ### Objetivos PRD que Atiende
 
@@ -165,7 +165,7 @@ Proteger el demo de ataques obvios (rate limiting, input validation) y asegurar 
     - `consultar_licencia()`
   - Logging: Scrubbing de tokens en exception handlers (HU-033) — **CRITICAL fix**
 
-### Excluido (Diferir v1.1)
+### Excluido (Diferir Fase 2)
 
 - ❌ Chat history encryption at rest (DB ya local)
 - ❌ mTLS entre servicios (no aplica demo monolítica)
@@ -275,6 +275,213 @@ Puede separarse en:
 
 ---
 
+## FASE 2 — Ruta conversacional completa (Fase 2)
+
+**Contexto:** la ruta actual del webhook va directo al LLM sin gate previo. Estas 5 épicas
+implementan la ruta exigida por el negocio (saludo → consentimiento habeas data → alta CRM →
+selección de flujo → cierre) y cierran la brecha del modelo de dominio
+(`docs/07-arquitectura/fase-2-mvp/02-Modelo_Dominio.md`: `Radicado → Conversación → Mensaje`).
+Orden de construcción: EP-006 → EP-007 → EP-008 → EP-009 → EP-010 (foundational antes que business).
+
+---
+
+## EP-006: Modelo Conversación + Consentimiento
+
+### Propósito Ejecutivo
+
+Materializar la entidad `Conversación` (hoy inexistente) y el consentimiento de tratamiento de datos,
+ligando `Radicado → Conversación → Mensaje` como manda el modelo de dominio. Cimiento de datos sobre
+el que se apoyan EP-008/009/010.
+
+### Por Qué Existe
+
+- **Brecha del modelo de dominio:** el doc declara `Conversación` como entidad entre `Radicado` y
+  `Mensaje`, pero no existe en `agent/db.py`. `Mensaje` (en `agent/memory.py`) se liga solo por
+  `telefono`, sin conversación ni radicado.
+- **Habeas data:** no hay persistencia de consentimiento; legalmente obligatorio antes de capturar PII.
+- **Blocker de EP-008/009/010:** el gate de consentimiento, la clasificación de flujo y el cierre
+  necesitan una conversación persistida con estado.
+
+### Objetivos PRD que Atiende
+
+- ✅ Trazabilidad de cada interacción (Radicado como agregado raíz)
+- ✅ Cumplimiento habeas data (base para EP-008)
+
+### Capabilities Incluidas
+
+- **Nivel 4 (Backend/Datos):** tabla `conversaciones`, columnas de consentimiento en `contactos`,
+  FK `mensajes.conversacion_id`, FK `conversaciones.radicado_id`, helpers de apertura/cierre.
+
+### Historias
+
+- HU-034: Entidad Conversación (abrir/cerrar) (complejidad 2)
+- HU-035: Cada mensaje ligado a su conversación (1)
+- HU-036: Consentimiento persistido en el contacto (1)
+- HU-037: Conversación ligada a su radicado (1)
+
+### Layer
+
+**foundational** — cimiento de datos; ninguna épica de negocio (EP-008/009/010) se construye antes.
+
+### Estimación (Rough)
+
+- **Story Points:** 5 · **Complejidad:** Media (modelo + migración)
+
+---
+
+## EP-007: Botones Interactivos WhatsApp
+
+### Propósito Ejecutivo
+
+Habilitar el envío y parseo de botones interactivos de WhatsApp (Meta Cloud API), requisito técnico
+del gate de consentimiento (Sí/No). Hoy el provider solo maneja texto.
+
+### Por Qué Existe
+
+- **Restricción actual:** `agent/providers/meta.py` solo envía `type:text` y descarta mensajes
+  entrantes que no sean `type:text` — las respuestas de botón se pierden.
+- **Blocker de EP-008:** sin botones no hay Sí/No predeterminado para el consentimiento.
+
+### Objetivos PRD que Atiende
+
+- ✅ Base técnica para habeas data (EP-008)
+
+### Capabilities Incluidas
+
+- **Nivel 4 (Backend/Integración):** `enviar_botones()` (payload `interactive`); parseo de
+  `type:interactive` (`button_reply.id`) en `parsear_webhook`; `MensajeEntrante` con `tipo`/`payload`.
+
+### Historias
+
+- HU-038: Enviar botones Sí/No al usuario (complejidad 2)
+- HU-039: Parsear la respuesta de botón interactivo (1)
+
+### Layer
+
+**foundational** — capacidad de integración; blocker de EP-008.
+
+### Estimación (Rough)
+
+- **Story Points:** 3 · **Complejidad:** Baja-Media
+
+---
+
+## EP-008: Gate de Consentimiento Habeas Data
+
+### Propósito Ejecutivo
+
+Insertar en la ruta del webhook, antes del LLM, el saludo + solicitud de aceptación de tratamiento de
+datos con botones Sí/No. Sin consentimiento no se atiende.
+
+### Por Qué Existe
+
+- **Cumplimiento legal:** capturar/registrar PII sin autorización previa es ilegal.
+- **Gap de ruta:** `recibir_webhook` va directo a `generar_respuesta` sin gate.
+
+### Objetivos PRD que Atiende
+
+- ✅ Cumplimiento habeas data · ✅ Confianza del usuario
+
+### Capabilities Incluidas
+
+- **Nivel 4 (Backend):** gate en `recibir_webhook`; texto de política editable vía parámetro
+  `texto_habeas_data`; ramas aceptar/rechazar.
+
+### Historias
+
+- HU-040: Saludo + solicitud de consentimiento a contacto nuevo (complejidad 2)
+- HU-041: Aceptar (Sí) desbloquea el flujo (1)
+- HU-042: Rechazar (No) despide y no atiende (1)
+
+### Layer
+
+**business** — construible tras EP-006 (datos) + EP-007 (botones).
+
+### Estimación (Rough)
+
+- **Story Points:** 5 · **Complejidad:** Media
+
+---
+
+## EP-009: Clasificación de Flujo + Alta CRM
+
+### Propósito Ejecutivo
+
+Tras aceptar el consentimiento, clasificar de forma determinista la conversación en
+comercial/soporte/otro, persistir el tipo, dar de alta el contacto en el CRM (con teléfono origen) y
+ligar la conversación a un radicado.
+
+### Por Qué Existe
+
+- **Routing implícito:** hoy el flujo lo decide el LLM vía tools; `clasificar_intencion` en `brain.py`
+  es código muerto. Sin persistir el tipo de solicitud no hay trazabilidad ni reportes por flujo.
+- **Alta CRM tardía:** hoy solo se registra lead si el LLM detecta interés comercial.
+- **Radicado por escalamiento:** hoy se crea un radicado por cada escalamiento en vez de reutilizar
+  el de la conversación.
+
+### Objetivos PRD que Atiende
+
+- ✅ Responder consultas comerciales (lead) · ✅ Escalar soporte con contexto · ✅ Recolectar leads
+
+### Capabilities Incluidas
+
+- **Nivel 4 (Backend):** `clasificar_intencion` real; `Conversacion.tipo_solicitud`; alta CRM al
+  aceptar; `escalar_a_humano` reutiliza el radicado de la conversación.
+
+### Historias
+
+- HU-043: Clasificar el flujo y persistirlo en la conversación (complejidad 2)
+- HU-044: Alta del contacto en el CRM al aceptar (2)
+- HU-045: Un radicado por conversación, reusado al escalar (2)
+
+### Layer
+
+**business** — construible tras EP-006/EP-008.
+
+### Estimación (Rough)
+
+- **Story Points:** 8 · **Complejidad:** Media-Alta (refactor de `escalar_a_humano`)
+
+---
+
+## EP-010: Cierre Explícito de Conversación
+
+### Propósito Ejecutivo
+
+Cerrar la conversación de forma explícita: por indicación del usuario (con despedida) o por
+inactividad tras 2 preguntas sin respuesta. Extiende HU-024/HU-025 (archivadas) con la entidad
+`Conversación` y la regla de 2 check-ins.
+
+### Por Qué Existe
+
+- **Cierre por usuario ausente:** hoy el LLM puede despedirse pero no cierra formalmente la
+  conversación.
+- **Inactividad con 1 sola pregunta:** `_revisar_inactividad` hace 1 check-in; el negocio pide 2.
+
+### Objetivos PRD que Atiende
+
+- ✅ Cierre limpio de conversación (journey fase 7)
+
+### Capabilities Incluidas
+
+- **Nivel 4 (Backend):** detección de intención de cierre; `_revisar_inactividad` con 2 check-ins;
+  `cerrar_conversacion(motivo)` con `motivo_cierre` (usuario|inactividad).
+
+### Historias
+
+- HU-046: Cierre por indicación del usuario + despedida (complejidad 1)
+- HU-047: Cierre por inactividad con 2 preguntas (2)
+
+### Layer
+
+**business** — construible tras EP-006.
+
+### Estimación (Rough)
+
+- **Story Points:** 3 · **Complejidad:** Baja-Media
+
+---
+
 ## Matriz de Cobertura: Épicas × Objetivos PRD (v1.0)
 
 | Objetivo PRD | EP-001 | EP-002 | EP-003-MINI | EP-005-MINI | Cobertura |
@@ -286,7 +493,7 @@ Puede separarse en:
 | 5. Recolectar leads | | | | ✓ | 100% |
 
 **Leyenda:** `✓` = atendido incidentalmente, `**✓**` = atendido directamente  
-**Nota:** EP-004 (RAG) eliminada. Puede re-introducirse en v1.1 si request
+**Nota:** EP-004 (RAG) eliminada completamente del alcance de v1.0.
 
 ---
 
@@ -317,8 +524,8 @@ Puede separarse en:
 | Capability | Por qué falta | Acción |
 |-----------|---------------|--------|
 | Dashboard de analytics | No aparece en v1 (out-of-scope) | Diferir a v2 |
-| Bi-directional Salesforce sync | EspoCRM is primero (out-of-scope v1) | Diferir a v1.1 |
-| Rich media (carousels, buttons) | Constrains v1: solo texto | Diferir a v1.1 |
+| Bi-directional Salesforce sync | EspoCRM is primero (out-of-scope v1) | Diferir a Fase 2 |
+| Rich media (carousels, buttons) | Constrains v1: solo texto | Diferir a Fase 2 |
 
 ---
 
@@ -328,7 +535,7 @@ Puede separarse en:
 
 1. ✅ **EP-001** (Test Suite Foundation) — Archivada. Gaps documentados en GAPS_EP001_EP002_AUDIT.md
 2. ✅ **EP-002** (Error Handling & Resilience) — Archivada. Gaps + 3 CRITICAL fixes documentados
-3. 🚀 **EP-003-MINI** (Security Hardening Demo) — 4 HU nuevas, 2 días. Reemplaza v1.1, entra en v1.0
+3. 🚀 **EP-003-MINI** (Security Hardening Demo) — 4 HU nuevas, 2 días. Reemplaza Fase 2, entra en v1.0
 4. 🚀 **EP-005-MINI** (Deployment Stack) — Docker + CI/CD + health checks, 3-4 días
 
 ### Parallelization Options
@@ -342,7 +549,7 @@ Puede separarse en:
 ## Notas de Planificación (v1.0 DEMO)
 
 - **Dependency:** EP-001/002 ya archivadas. Gaps documentados, requieren fixes (~2-3 días).
-- **EP-003-MINI:** 4 HU nuevas, 2 días. Reemplaza v1.1 full scope.
+- **EP-003-MINI:** 4 HU nuevas, 2 días. Reemplaza Fase 2 full scope.
 - **EP-005-MINI:** 3-4 días (Docker + CI/CD + health checks).
 - **Timing:** Laptop demo hoy → Mañana PM (con fixes rápidos EP-002). Staging demo 3-4 días. Full demo 2 semanas.
 - **Team:** 2 backend engineers (fixes + EP-003/005), 1 QA (security tests).
@@ -374,3 +581,142 @@ Puede separarse en:
 **Estado:** Active — Lista para ejecución  
 **Owner:** IngKevin95  
 **Auditoría Factory:** Completa (3 agentes, hallazgos documentados)
+
+---
+---
+## EP-REPAIRS: Deuda Técnica y Correcciones
+**Prioridad:** Alta | **Complejidad:** Baja
+**Descripción:** Correcciones de bugs detectados y estabilización del código existente.
+**Historias:**
+- [FIX-REPAIR-001](docs/04-historias/FIX-REPAIR-001.md) (Eliminado, ver HU-033)
+- [FIX-REPAIR-002](docs/04-historias/FIX-REPAIR-002.md)
+- [FIX-REPAIR-003](docs/04-historias/FIX-REPAIR-003.md)
+- [FIX-REPAIR-004](docs/04-historias/FIX-REPAIR-004.md)
+
+---
+
+## FASE 3 — Scale-Out & Integraciones Avanzadas (Post-v1.0)
+
+**Contexto:** Tras estabilizar el core del bot en la Fase 1 y Fase 2, la Fase 3 se enfoca en expandir las capacidades del producto hacia nuevos canales, formatos interactivos, visibilidad de datos e integraciones empresariales avanzadas (como se define en el PRD).
+
+---
+
+## EP-011: Rich Media & Componentes Interactivos
+
+### Propósito Ejecutivo
+
+Permitir que el bot envíe y procese contenido enriquecido (carruseles de productos, archivos PDF como cotizaciones, imágenes y notas de voz) para mejorar la experiencia del usuario y hacerla más atractiva.
+
+### Por Qué Existe
+
+- **Limitación actual:** El bot (v1) solo admite texto plano y botones simples (Sí/No).
+- **Expectativa del usuario:** En flujos comerciales, los clientes esperan catálogos visuales o poder enviar notas de voz cuando están ocupados.
+
+### Objetivos PRD que Atiende
+
+- ✅ Mejorar la conversión comercial (mostrar vs. contar).
+- ✅ Incrementar el NPS y satisfacción del usuario (UX más rica).
+
+### Capabilities Incluidas
+
+- **Nivel 4:** Soporte para recepción/envío de Media en `providers/meta.py`. Parsing de notas de voz usando Whisper/Google STT. Generación de plantillas (templates) de WhatsApp con carruseles para "Consultar Ofertas".
+
+### Historias (Tentativas)
+
+- HU-048: Enviar catálogos y ofertas usando WhatsApp Carousel Templates.
+- HU-049: Enviar y recibir archivos adjuntos (PDFs de cotizaciones).
+- HU-050: Transcribir notas de voz del usuario a texto (Voice-to-Text).
+
+### Layer
+
+**business** — Mejora de producto y experiencia de usuario.
+
+---
+
+## EP-012: Soporte Multi-canal (Telegram & SMS)
+
+### Propósito Ejecutivo
+
+Desacoplar la lógica conversacional (Brain) del proveedor Meta, permitiendo que el bot responda desde Telegram o Webchat/SMS, ampliando la cobertura de usuarios.
+
+### Por Qué Existe
+
+- **Riesgo:** Dependencia exclusiva de Meta Cloud API (single point of failure y lock-in).
+- **Adopción:** Ciertos perfiles B2B prefieren canales alternativos.
+
+### Objetivos PRD que Atiende
+
+- ✅ Extender la disponibilidad a otras plataformas (Multi-canal).
+
+### Capabilities Incluidas
+
+- **Nivel 4:** Implementar nuevos adaptadores en `providers/` (ej. `telegram.py`, `twilio.py`). Refactor de `main.py` para exponer webhooks por canal.
+
+### Historias (Tentativas)
+
+- HU-051: Adaptador y Webhook para Telegram.
+- HU-052: Enrutamiento de mensajes Multi-canal en `agent/main.py`.
+
+### Layer
+
+**foundational/business** — Arquitectura de adaptadores y feature de negocio.
+
+---
+
+## EP-013: Dashboard de Analytics y Reportes
+
+### Propósito Ejecutivo
+
+Construir una interfaz visual (UI) de analíticas para que el equipo comercial y los líderes de soporte puedan medir el impacto del bot, ver el volumen de leads y el turnaround.
+
+### Por Qué Existe
+
+- **Problema:** Actualmente las métricas están enterradas en PostgreSQL, Prometheus o EspoCRM. No hay una vista unificada de "Cuántos leads generó el bot hoy".
+- **Objetivo de Negocio:** Visibilidad clara del ROI del bot.
+
+### Objetivos PRD que Atiende
+
+- ✅ Monitoreo de KPIs de Negocio (Conversión, Resueltas automáticamente, Leads capturados).
+
+### Capabilities Incluidas
+
+- **Nivel 4:** Endpoints de analíticas en FastAPI o integración de Metabase/Grafana Business Dashboard conectada a PostgreSQL.
+
+### Historias (Tentativas)
+
+- HU-053: Endpoint agregador de métricas comerciales y de soporte.
+- HU-054: Integración/Dashboard visual (Metabase o frontend simple) para KPIs del bot.
+
+### Layer
+
+**business** — Feature de inteligencia de negocios.
+
+---
+
+## EP-014: Sincronización Bidireccional Avanzada (CRM & ERP)
+
+### Propósito Ejecutivo
+
+Sincronizar de forma profunda el bot con herramientas empresariales más robustas (como Salesforce) y permitir actualización bidireccional (si el ticket se cierra en CRM, notificar al usuario en WhatsApp).
+
+### Por Qué Existe
+
+- **Limitación actual:** La integración con EspoCRM es básica (crear caso/lead). El bot no sabe cuándo un agente humano resolvió el caso si el usuario no pregunta.
+- **Escalabilidad:** Empresas más grandes requerirán Salesforce.
+
+### Objetivos PRD que Atiende
+
+- ✅ Automatizar triaje de soporte con loop cerrado (notificación proactiva).
+
+### Capabilities Incluidas
+
+- **Nivel 4:** Background tasks (Celery/Cron) o Webhooks inversos desde el CRM al bot para emitir notificaciones activas (`template messages` en WhatsApp).
+
+### Historias (Tentativas)
+
+- HU-055: Webhook inverso desde EspoCRM para notificar al usuario el cierre de ticket.
+- HU-056: Adaptador para integración con Salesforce.
+
+### Layer
+
+**business** — Operaciones empresariales.

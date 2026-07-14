@@ -40,6 +40,29 @@
 
 ---
 
+## FASE 2 — Ruta conversacional (Fase 2): 14 HU nuevas
+
+Orden de construcción foundational → business (EP-006 → EP-010). V/E indicativo.
+
+| Prioridad | HU | Título | Épica | Complejidad | Estado |
+|-----------|----|----|-------|-------------|--------|
+| **MUST** | HU-034 | Entidad Conversación (abrir/cerrar) | EP-006 | 2 | draft |
+| **MUST** | HU-035 | Mensaje ligado a su conversación | EP-006 | 1 | draft |
+| **MUST** | HU-036 | Consentimiento persistido en el contacto | EP-006 | 1 | draft |
+| **SHOULD** | HU-037 | Conversación ligada a su radicado | EP-006 | 1 | draft |
+| **MUST** | HU-038 | Enviar botones Sí/No | EP-007 | 2 | draft |
+| **MUST** | HU-039 | Parsear respuesta de botón interactivo | EP-007 | 1 | draft |
+| **MUST** | HU-040 | Saludo + solicitud de consentimiento | EP-008 | 2 | draft |
+| **MUST** | HU-041 | Aceptar (Sí) desbloquea el flujo | EP-008 | 1 | draft |
+| **MUST** | HU-042 | Rechazar (No) despide y no atiende | EP-008 | 1 | draft |
+| **MUST** | HU-043 | Clasificar el flujo y persistirlo | EP-009 | 2 | draft |
+| **MUST** | HU-044 | Alta del contacto en CRM al aceptar | EP-009 | 2 | draft |
+| **SHOULD** | HU-045 | Un radicado por conversación, reusado al escalar | EP-009 | 2 | draft |
+| **MUST** | HU-046 | Cierre por indicación del usuario + despedida | EP-010 | 1 | draft |
+| **SHOULD** | HU-047 | Cierre por inactividad con 2 preguntas | EP-010 | 2 | draft |
+
+---
+
 ## Resumen por Épica (v1.0)
 
 | Épica | Historias | Cantidad | Estado | Esfuerzo |
