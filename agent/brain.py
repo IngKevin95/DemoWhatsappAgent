@@ -79,19 +79,16 @@ def _tools_con_telefono(telefono: str) -> list:
         y lo reescala a comercial."""
         return tools.reclasificar_caso_sin_licencia(caso_id, telefono, nombre)
 
-    def registrar_cliente(
-        numero_identificacion: str | None = None,
-        nit_empresa: str | None = None,
-        nombre_empresa: str | None = None,
-        sector: str | None = None,
-        actividad: str | None = None,
-        empleados: str | None = None,
-    ) -> dict:
-        """Marca al remitente actual como cliente confirmado, guardando su identificación
-        (y el perfil de su empresa, si aplica). Requiere que el contacto ya exista."""
+    def _registrar_cliente(numero_identificacion: str | None = None, nit_empresa: str | None = None, nombre_empresa: str | None = None, sector: str | None = None, actividad: str | None = None, empleados: str | None = None) -> dict:
+        """Marca un contacto como cliente confirmado y guarda sus datos de identificación empresarial/personal."""
         return tools.registrar_cliente(
             telefono, numero_identificacion, nit_empresa, nombre_empresa, sector, actividad, empleados
         )
+
+    def _finalizar_conversacion(motivo_cierre: str = "usuario") -> dict:
+        """Cierra la conversación actual de forma explícita.
+        Debe llamarse cuando el usuario se despide o indica que ya no requiere más ayuda."""
+        return tools.finalizar_conversacion(telefono, motivo_cierre)
 
     return [
         registrar_lead_crm,
@@ -101,7 +98,8 @@ def _tools_con_telefono(telefono: str) -> list:
         crear_ticket_soporte,
         escalar_a_humano,
         reclasificar_caso_sin_licencia,
-        registrar_cliente,
+        _registrar_cliente,
+        _finalizar_conversacion,
     ]
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
@@ -200,11 +198,14 @@ async def generar_respuesta(
                 import time as time_module
                 tiempo_inicio = time_module.time()
 
-                # FIX-REPAIR-002: Apply circuit breaker to Gemini call
+                # FIX-REPAIR-002: Apply circuit breaker to Gemini call.
+                # CircuitBreaker.__call__ es un DECORADOR: envuelve la fn y
+                # devuelve el wrapper; hay que EJECUTAR ese wrapper.
                 def _send_with_cb():
-                    return _circuit_breaker_gemini(
+                    wrapped = _circuit_breaker_gemini(
                         lambda: chat.send_message(texto_usuario)
                     )
+                    return wrapped()
 
                 respuesta = await asyncio.wait_for(
                     asyncio.to_thread(_send_with_cb),
@@ -243,23 +244,24 @@ async def generar_respuesta(
     return texto if texto else random.choice(RESPUESTAS_FALLBACK)
 
 
-def clasificar_intencion(texto: str) -> dict:
-    """Classify intent from user message."""
-    texto_lower = texto.lower()
-
-    # Simple keyword matching
-    if any(w in texto_lower for w in ["hola", "saludos", "buenos días", "buenas noches"]):
-        return {"intencion": "bienvenida", "confianza": 0.95}
-    elif any(w in texto_lower for w in ["precio", "costo", "valor", "cuánto cuesta"]):
-        return {"intencion": "consultar_precio", "confianza": 0.9}
-    elif any(w in texto_lower for w in ["agendar", "agenda", "demo", "cita", "reunión"]):
-        return {"intencion": "agendar_cita", "confianza": 0.85}
-    elif any(w in texto_lower for w in ["licencia", "estado", "vigencia", "suscripción"]):
-        return {"intencion": "consultar_licencia", "confianza": 0.8}
-    elif any(w in texto_lower for w in ["escala", "soporte", "urgente", "problema", "error"]):
-        return {"intencion": "escalar_a_humano", "confianza": 0.75}
-    else:
-        return {"intencion": "unknown", "confianza": 0.3}
+async def clasificar_intencion(texto: str) -> str:
+    """Classify intent from user message into 'comercial', 'soporte' or 'otro'."""
+    try:
+        response = await client.aio.models.generate_content(
+            model=MODEL_NAME,
+            contents=texto,
+            config=types.GenerateContentConfig(
+                system_instruction="Clasifica el siguiente mensaje en una sola palabra: 'comercial', 'soporte' u 'otro'. Responde únicamente con esa palabra.",
+                temperature=0.0
+            )
+        )
+        tipo = response.text.strip().lower()
+        if tipo not in ["comercial", "soporte", "otro"]:
+            return "otro"
+        return tipo
+    except Exception as e:
+        logger.error("Fallo clasificando intencion: %s", e)
+        return "otro"
 
 
 def consultar_precio_modulo(nombre_modulo: str, moneda: str = "EUR", cantidad: int = 1) -> dict:

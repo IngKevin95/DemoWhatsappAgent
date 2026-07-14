@@ -426,14 +426,29 @@ def escalar_a_humano(telefono: str, nombre: str, resumen_caso: str, area: str) -
     with SyncSession() as session:
         _upsert_contacto(session, telefono, nombre)
         area_row = _get_area(session, area)
-        # ponytail: el id lo pone el serial de Postgres -> único y sin colisión
-        # posible, ni con concurrencia; nada de random.randint + reintentos.
-        radicado = Radicado(
-            telefono=telefono, area_id=area_row.id, resumen=resumen_caso, estado="escalado",
-        )
-        session.add(radicado)
-        session.flush()
-        caso_id = f"ESC-{radicado.id}"
+        
+        from .db import Conversacion
+        conv = session.query(Conversacion).filter(
+            Conversacion.telefono == telefono,
+            Conversacion.estado == "abierta"
+        ).order_by(Conversacion.id.desc()).first()
+
+        if conv and conv.radicado_id:
+            radicado = session.query(Radicado).get(conv.radicado_id)
+            radicado.resumen = resumen_caso
+            radicado.area_id = area_row.id
+            radicado.estado = "escalado"
+            session.flush()
+            caso_id = f"ESC-{radicado.id}"
+        else:
+            radicado = Radicado(
+                telefono=telefono, area_id=area_row.id, resumen=resumen_caso, estado="escalado",
+            )
+            session.add(radicado)
+            session.flush()
+            if conv:
+                conv.radicado_id = radicado.id
+            caso_id = f"ESC-{radicado.id}"
 
         try:
             crm_case = espocrm.crear_caso(telefono, f"[{caso_id}] {resumen_caso}", area)
@@ -585,3 +600,21 @@ def registrar_cliente(
             return cliente
         session.commit()
         return {"telefono": telefono, "estado": "cliente_registrado"}
+
+
+def finalizar_conversacion(telefono: str, motivo_cierre: str = "usuario") -> dict:
+    """Cierra la conversación actual de forma explícita.
+    Debe llamarse cuando el usuario se despide o indica que ya no requiere más ayuda."""
+    with SyncSession() as session:
+        from .db import Conversacion
+        conv = session.query(Conversacion).filter(
+            Conversacion.telefono == telefono,
+            Conversacion.estado == "abierta"
+        ).order_by(Conversacion.id.desc()).first()
+        
+        if conv:
+            conv.estado = "cerrada"
+            conv.motivo_cierre = motivo_cierre
+            session.commit()
+            return {"status": "cerrada", "motivo": motivo_cierre}
+        return {"status": "error", "mensaje": "No hay conversación abierta para cerrar."}
