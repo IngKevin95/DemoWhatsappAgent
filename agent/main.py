@@ -333,6 +333,7 @@ async def procesar_mensaje_entrante(mensaje, canal="meta"):
     from .memory import abrir_conversacion, obtener_conversacion_activa
     with SyncSession() as session:
         contacto = session.query(Contacto).filter(Contacto.telefono == mensaje.telefono).first()
+        es_nuevo = contacto is None
         if not contacto:
             contacto = Contacto(telefono=mensaje.telefono, nombre=mensaje.nombre or mensaje.telefono, consentimiento_datos=False, canal=canal)
             session.add(contacto)
@@ -364,9 +365,10 @@ async def procesar_mensaje_entrante(mensaje, canal="meta"):
                 {"id": "SI", "title": "Sí, acepto"},
                 {"id": "NO", "title": "No, gracias"}
             ]
+            saludo = "¡Hola! Soy SysBot, el asesor virtual de SysPlus. " if es_nuevo else ""
             await enviar_mensaje_seguro(
-                mensaje.telefono, 
-                "Por políticas de privacidad (Habeas Data), necesitamos tu consentimiento para procesar tus datos. Por favor elige una opción.",
+                mensaje.telefono,
+                saludo + "Por políticas de privacidad (Habeas Data), necesitamos tu consentimiento para procesar tus datos. Por favor elige una opción.",
                 botones=botones,
                 canal=canal
             )
