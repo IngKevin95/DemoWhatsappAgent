@@ -8,6 +8,8 @@ class MensajeEntrante:
     telefono: str
     texto: str
     nombre: Optional[str] = None
+    tipo: str = "text"
+    media_id: Optional[str] = None
 
 
 class ProveedorWhatsApp(ABC):
@@ -24,5 +26,12 @@ class ProveedorWhatsApp(ABC):
         return True
 
     @abstractmethod
-    async def enviar_mensaje(self, telefono: str, texto: str) -> Any:
-        """Envía un mensaje de texto al número dado."""
+    async def enviar_mensaje(
+        self, 
+        telefono: str, 
+        texto: str, 
+        botones: Optional[list[dict]] = None,
+        template: Optional[dict] = None,
+        documento: Optional[dict] = None
+    ) -> Any:
+        """Envía un mensaje de texto (y opcionalmente botones, template o documento) al número dado."""

@@ -4,8 +4,11 @@ from .base import ProveedorWhatsApp
 from .meta import ProveedorMeta
 
 
-def obtener_proveedor() -> ProveedorWhatsApp:
-    proveedor = os.getenv("WHATSAPP_PROVIDER", "meta")
-    if proveedor == "meta":
+from .telegram import ProveedorTelegram
+
+def obtener_proveedor(canal: str = "meta") -> ProveedorWhatsApp:
+    if canal == "meta":
         return ProveedorMeta()
-    raise ValueError(f"Proveedor no soportado: {proveedor}")
+    elif canal == "telegram":
+        return ProveedorTelegram()
+    raise ValueError(f"Proveedor no soportado: {canal}")
