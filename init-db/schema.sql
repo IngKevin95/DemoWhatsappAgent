@@ -132,6 +132,7 @@ CREATE TABLE public.radicados (
     area_id      integer,
     resumen      character varying,
     estado       character varying NOT NULL DEFAULT 'abierto',
+    modo         character varying,                          -- conectado | notificacion_con_contacto | notificacion
     agente_id    integer,
     crm_case_id  character varying,
     email_enviado boolean DEFAULT false,
