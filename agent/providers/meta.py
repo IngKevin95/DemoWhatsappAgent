@@ -37,29 +37,110 @@ class ProveedorMeta(ProveedorWhatsApp):
             if not mensajes:
                 return None
             msg = mensajes[0]
-            if msg.get("type") != "text":
-                return None
+            
             telefono = msg["from"]
-            texto = msg["text"]["body"]
             nombre = entry.get("contacts", [{}])[0].get("profile", {}).get("name")
-            return MensajeEntrante(telefono=telefono, texto=texto, nombre=nombre)
+            
+            if msg.get("type") == "text":
+                texto = msg["text"]["body"]
+                return MensajeEntrante(telefono=telefono, texto=texto, nombre=nombre)
+            elif msg.get("type") == "interactive" and msg.get("interactive", {}).get("type") == "button_reply":
+                texto = msg["interactive"]["button_reply"]["id"]
+                return MensajeEntrante(telefono=telefono, texto=texto, nombre=nombre)
+            elif msg.get("type") == "audio":
+                media_id = msg["audio"]["id"]
+                return MensajeEntrante(telefono=telefono, texto="", nombre=nombre, tipo="audio", media_id=media_id)
+            elif msg.get("type") == "document":
+                media_id = msg["document"]["id"]
+                return MensajeEntrante(telefono=telefono, texto="", nombre=nombre, tipo="document", media_id=media_id)
+            else:
+                return None
+                
         except (KeyError, IndexError):
             return None
 
-    async def enviar_mensaje(self, telefono: str, texto: str) -> Any:
+    async def enviar_mensaje(
+        self, 
+        telefono: str, 
+        texto: str, 
+        botones: Optional[list[dict]] = None,
+        template: Optional[dict] = None,
+        documento: Optional[dict] = None
+    ) -> Any:
         headers = {
             "Authorization": f"Bearer {self.token}",
             "Content-Type": "application/json",
         }
-        body = {
-            "messaging_product": "whatsapp",
-            "to": telefono,
-            "type": "text",
-            "text": {"body": texto},
-        }
+        
+        if template:
+            body = {
+                "messaging_product": "whatsapp",
+                "to": telefono,
+                "type": "template",
+                "template": template
+            }
+        elif documento:
+            body = {
+                "messaging_product": "whatsapp",
+                "to": telefono,
+                "type": "document",
+                "document": documento
+            }
+        elif botones:
+            if len(botones) > 3:
+                raise ValueError("Meta API only supports up to 3 buttons")
+            
+            meta_buttons = [
+                {
+                    "type": "reply",
+                    "reply": {
+                        "id": b["id"],
+                        "title": b["title"]
+                    }
+                } for b in botones
+            ]
+            
+            body = {
+                "messaging_product": "whatsapp",
+                "to": telefono,
+                "type": "interactive",
+                "interactive": {
+                    "type": "button",
+                    "body": {
+                        "text": texto
+                    },
+                    "action": {
+                        "buttons": meta_buttons
+                    }
+                }
+            }
+        else:
+            body = {
+                "messaging_product": "whatsapp",
+                "to": telefono,
+                "type": "text",
+                "text": {"body": texto},
+            }
+            
         async with httpx.AsyncClient() as client:
             resp = await client.post(self.api_url, headers=headers, json=body)
             if resp.status_code >= 400:
                 print("META ERROR BODY:", resp.text)
             resp.raise_for_status()
             return resp.json()
+
+    async def descargar_media(self, media_id: str) -> bytes:
+        headers = {
+            "Authorization": f"Bearer {self.token}",
+        }
+        # First get the media URL
+        media_info_url = f"https://graph.facebook.com/v20.0/{media_id}"
+        async with httpx.AsyncClient() as client:
+            resp = await client.get(media_info_url, headers=headers)
+            resp.raise_for_status()
+            media_url = resp.json()["url"]
+            
+            # Then download the actual bytes
+            resp_media = await client.get(media_url, headers=headers)
+            resp_media.raise_for_status()
+            return resp_media.content
