@@ -107,23 +107,71 @@ class TestReclasificarCaso:
 class TestEscalarAHumano:
     """Tests for escalation."""
 
+    def _mock_session(self):
+        """Build a minimal mock SyncSession context manager."""
+        from unittest.mock import MagicMock
+        session = MagicMock()
+        session.__enter__ = MagicMock(return_value=session)
+        session.__exit__ = MagicMock(return_value=False)
+        # query().filter().order_by().first() -> None
+        session.query.return_value.filter.return_value.order_by.return_value.first.return_value = None
+        session.query.return_value.filter.return_value.first.return_value = None
+        session.query.return_value.get.return_value = None
+        session.flush = MagicMock()
+        session.commit = MagicMock()
+        session.add = MagicMock()
+        return session
+
     def test_escalar_a_humano_valido(self):
-        """Escalate to human support."""
-        resultado = escalar_a_humano(
-            telefono="34912345678",
-            nombre="Juan Pérez",
-            resumen_caso="Error en módulo Pro",
-            area="Soporte"
-        )
-        assert isinstance(resultado, dict)
+        """Escalate to human support (mocked DB + external services)."""
+        session = self._mock_session()
+        # Mock area row and radicado
+        area_row = MagicMock()
+        area_row.id = 1
+        session.query.return_value.filter.return_value.first.return_value = area_row
+
+        radicado_mock = MagicMock()
+        radicado_mock.id = 42
+        radicado_mock.email_enviado = True
+        radicado_mock.crm_case_id = "CRM-001"
+
+        with patch("agent.tools.SyncSession", return_value=session), \
+             patch("agent.tools._upsert_contacto", return_value=MagicMock()), \
+             patch("agent.tools._get_area", return_value=area_row), \
+             patch("agent.tools._agentes_por_area", return_value=[]), \
+             patch("agent.tools.espocrm.crear_caso", return_value={"id": "CRM-001"}), \
+             patch("agent.tools.enviar_email", return_value=None), \
+             patch("agent.tools.Radicado", return_value=radicado_mock):
+            resultado = escalar_a_humano(
+                telefono="34912345678",
+                nombre="Juan Pérez",
+                resumen_caso="Error en módulo Pro",
+                area="Soporte"
+            )
+            assert isinstance(resultado, dict)
 
     def test_escalar_a_humano_sin_agentes(self):
-        """Handle escalation when no agents available."""
-        resultado = escalar_a_humano(
-            telefono="34912345678",
-            nombre="Juan Pérez",
-            resumen_caso="Urgente",
-            area="AreaQueNoExiste"
-        )
-        # Should handle gracefully
-        assert resultado is not None
+        """Handle escalation when no agents available (mocked DB)."""
+        session = self._mock_session()
+        area_row = MagicMock()
+        area_row.id = 1
+        radicado_mock = MagicMock()
+        radicado_mock.id = 99
+        radicado_mock.email_enviado = False
+
+        with patch("agent.tools.SyncSession", return_value=session), \
+             patch("agent.tools._upsert_contacto", return_value=MagicMock()), \
+             patch("agent.tools._get_area", return_value=area_row), \
+             patch("agent.tools._agentes_por_area", return_value=[]), \
+             patch("agent.tools.espocrm.crear_caso", return_value={"id": "CRM-099"}), \
+             patch("agent.tools.enviar_email", return_value=None), \
+             patch("agent.tools.Radicado", return_value=radicado_mock):
+            resultado = escalar_a_humano(
+                telefono="34912345678",
+                nombre="Juan Pérez",
+                resumen_caso="Urgente",
+                area="AreaQueNoExiste"
+            )
+            # Should handle gracefully - returns dict with mensaje de sin agentes
+            assert resultado is not None
+            assert isinstance(resultado, dict)
