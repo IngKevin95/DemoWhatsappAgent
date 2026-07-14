@@ -25,6 +25,11 @@ jobs:
       run: |
         pytest --cov=agent --cov-report=xml --cov-report=term-missing -v
 
+    - name: Security scan (bandit)
+      run: |
+        bandit -r agent/ -f json -o bandit-report.json || true
+        bandit -r agent/ -ll
+
     - name: Upload coverage reports
       uses: codecov/codecov-action@v3
       with:

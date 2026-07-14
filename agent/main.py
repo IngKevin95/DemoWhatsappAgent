@@ -4,6 +4,7 @@ import hashlib
 import json
 import logging
 import os
+import re
 from contextlib import asynccontextmanager
 from datetime import datetime, timedelta, timezone
 
@@ -12,7 +13,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, Request
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, JSONResponse, Response
 
 from .brain import generar_respuesta
 from .db import Contacto, Parametro, SyncSession
@@ -26,9 +27,130 @@ from .memory import (
 )
 from .providers import obtener_proveedor
 from .tools import promover_colas
+from .prometheus_metrics import (
+    get_metrics, http_requests_total, http_request_duration_seconds,
+    demobot_uptime_seconds, demobot_active_conversations, demobot_errors_total,
+    demobot_dependency_health
+)
+from .scheduler import start_scheduler, stop_scheduler
 
 proveedor = obtener_proveedor()
 logger = logging.getLogger(__name__)
+
+# App startup tracking (for /health endpoint)
+_app_start_time = datetime.now(timezone.utc)
+
+# Secrets to scrub from logs
+_SECRETS_PATTERNS = [
+    r'DATABASE_URL=[^\s]+',
+    r'GOOGLE_CLIENT_ID=[^\s]+',
+    r'GOOGLE_CLIENT_SECRET=[^\s]+',
+    r'META_API_TOKEN=[^\s]+',
+    r'FIREBIRD_PASSWORD=[^\s]+',
+    r'postgresql://[^\s]+',
+]
+
+
+def scrub_secrets(message: str) -> str:
+    """Scrub sensitive credentials from log messages."""
+    scrubbed = message
+    for pattern in _SECRETS_PATTERNS:
+        scrubbed = re.sub(pattern, '***REDACTED***', scrubbed, flags=re.IGNORECASE)
+    return scrubbed
+
+
+def sanitize_input(user_input: str) -> str:
+    """Sanitize user input to prevent XSS and SQL injection."""
+    if not user_input:
+        return user_input
+
+    # Remove script tags and event handlers
+    sanitized = re.sub(r'<script[^>]*>.*?</script>', '', user_input, flags=re.IGNORECASE | re.DOTALL)
+    sanitized = re.sub(r'\bon\w+\s*=', '', sanitized, flags=re.IGNORECASE)
+
+    # Remove dangerous SQL keywords at start of input
+    dangerous_sql = r'\b(DROP|DELETE|TRUNCATE|INSERT|UPDATE|ALTER|CREATE|EXEC)\b'
+    sanitized = re.sub(dangerous_sql, '', sanitized, flags=re.IGNORECASE)
+
+    return sanitized
+
+
+async def probe_postgres(timeout: int = 3) -> str:
+    """Probe PostgreSQL connectivity with timeout. Returns 'ok', 'degraded', or 'error'."""
+    try:
+        async with asyncio.timeout(timeout):
+            with SyncSession() as session:
+                session.execute("SELECT 1")
+                return "ok"
+    except asyncio.TimeoutError:
+        logger.warning("Postgres probe timeout after %ds", timeout)
+        return "degraded"
+    except Exception as e:
+        logger.error("Postgres probe failed: %s", str(e))
+        return "error"
+
+
+async def probe_gemini(timeout: int = 5) -> str:
+    """Probe Gemini API availability with timeout. Returns 'ok', 'degraded', or 'error'."""
+    try:
+        async with asyncio.timeout(timeout):
+            # Simple test: verify API key and model availability
+            import google.generativeai as genai
+            genai.configure(api_key=os.getenv("GEMINI_API_KEY", ""))
+            model = genai.GenerativeModel("gemini-1.5-flash")
+            # Quick test: generate minimal response
+            response = model.generate_content("test", stream=False)
+            return "ok" if response else "degraded"
+    except asyncio.TimeoutError:
+        logger.warning("Gemini probe timeout after %ds", timeout)
+        return "degraded"
+    except Exception as e:
+        logger.error("Gemini probe failed: %s", str(e))
+        return "error"
+
+
+async def probe_espocrm(timeout: int = 5) -> str:
+    """Probe EspoCRM API availability with timeout. Returns 'ok', 'degraded', or 'error'."""
+    try:
+        async with asyncio.timeout(timeout):
+            import httpx
+            espocrm_url = os.getenv("ESPOCRM_URL", "http://espocrm")
+            api_key = os.getenv("ESPOCRM_API_KEY", "")
+            async with httpx.AsyncClient() as client:
+                response = await client.get(
+                    f"{espocrm_url}/api/v1/App/info",
+                    headers={"X-Api-Key": api_key},
+                    timeout=timeout
+                )
+                return "ok" if response.status_code == 200 else "degraded"
+    except asyncio.TimeoutError:
+        logger.warning("EspoCRM probe timeout after %ds", timeout)
+        return "degraded"
+    except Exception as e:
+        logger.error("EspoCRM probe failed: %s", str(e))
+        return "error"
+
+
+async def probe_firebird(timeout: int = 3) -> str:
+    """Probe Firebird database connectivity with timeout. Returns 'ok', 'degraded', or 'error'."""
+    try:
+        async with asyncio.timeout(timeout):
+            from firebird.driver import connect
+            conn = connect(
+                host=os.getenv("FIREBIRD_HOST", "firebird"),
+                port=int(os.getenv("FIREBIRD_PORT", 3050)),
+                database=os.getenv("FIREBIRD_DATABASE", ""),
+                user=os.getenv("FIREBIRD_USER", "sysdba"),
+                password=os.getenv("FIREBIRD_PASSWORD", ""),
+            )
+            conn.close()
+            return "ok"
+    except asyncio.TimeoutError:
+        logger.warning("Firebird probe timeout after %ds", timeout)
+        return "degraded"
+    except Exception as e:
+        logger.error("Firebird probe failed: %s", str(e))
+        return "error"
 
 CHECKIN_INACTIVIDAD_SEGUNDOS = 300
 CIERRE_INACTIVIDAD_SEGUNDOS = 300
@@ -93,9 +215,11 @@ def _timeout_pausa_minutos(session) -> int:
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     await inicializar_db()
+    start_scheduler()  # Start background scheduler
     tarea = asyncio.create_task(_revisar_inactividad())
     yield
     tarea.cancel()
+    stop_scheduler()  # Stop scheduler on shutdown
 
 
 app = FastAPI(lifespan=lifespan)
@@ -104,6 +228,57 @@ app = FastAPI(lifespan=lifespan)
 @app.get("/")
 async def root():
     return {"status": "SysBot activo"}
+
+
+@app.get("/health")
+async def health():
+    """Health check endpoint: returns 200 with app status and real dependency probes."""
+    global _app_start_time
+    now = datetime.now(timezone.utc)
+    uptime_seconds = int((now - _app_start_time).total_seconds())
+
+    # Run all probes in parallel with asyncio
+    postgres_status, gemini_status, espocrm_status, firebird_status = await asyncio.gather(
+        probe_postgres(timeout=3),
+        probe_gemini(timeout=5),
+        probe_espocrm(timeout=5),
+        probe_firebird(timeout=3),
+        return_exceptions=False
+    )
+
+    return JSONResponse({
+        "status": "healthy",
+        "timestamp": now.isoformat().replace('+00:00', 'Z'),
+        "uptime_seconds": uptime_seconds,
+        "version": "v1.0.0",
+        "dependencies": {
+            "postgres": postgres_status,
+            "gemini": gemini_status,
+            "espocrm": espocrm_status,
+            "firebird": firebird_status
+        }
+    })
+
+
+@app.get("/ready")
+async def ready():
+    """Readiness probe: returns 200 if Postgres + Gemini are 'ok', 503 otherwise."""
+    postgres_status = await probe_postgres(timeout=3)
+    gemini_status = await probe_gemini(timeout=5)
+
+    is_ready = postgres_status == "ok" and gemini_status == "ok"
+    status_code = 200 if is_ready else 503
+
+    return JSONResponse({
+        "ready": is_ready
+    }, status_code=status_code)
+
+
+@app.get("/metrics", response_class=Response)
+async def metrics():
+    """Prometheus metrics endpoint: returns real instrumented metrics."""
+    metrics_data = get_metrics()
+    return Response(content=metrics_data, media_type="text/plain; charset=utf-8; version=0.0.4")
 
 
 def validar_firma_meta(body: str, signature: str | None, verify_token: str) -> bool:
@@ -180,13 +355,15 @@ async def recibir_webhook(request: Request):
         return {"status": "conectado"}
 
     historial = await obtener_historial(mensaje.telefono)
+    # Sanitize user input before processing
+    mensaje_sanitizado = sanitize_input(mensaje.texto)
     respuesta = await generar_respuesta(
-        mensaje=mensaje.texto,
+        mensaje=mensaje_sanitizado,
         telefono=mensaje.telefono,
         historial=historial
     )
 
-    await guardar_mensaje(mensaje.telefono, "user", mensaje.texto)
+    await guardar_mensaje(mensaje.telefono, "user", mensaje_sanitizado)
     await guardar_mensaje(mensaje.telefono, "assistant", respuesta)
 
     await enviar_mensaje_seguro(mensaje.telefono, respuesta)

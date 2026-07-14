@@ -1,6 +1,6 @@
 # CLAUDE.md
 
-<!-- BEGIN factory-build-harness v0.8.0 -->
+<!-- BEGIN factory-build-harness v0.9.0 -->
 ## Arnés de construcción (Factory Build Harness)
 
 Este proyecto instaló `@factory/factory-spec-build`, el arnés que toma el trabajo de discovery
@@ -68,13 +68,13 @@ Reglas de nomenclatura que conviene memorizar:
 `security-reviewer`, `stack-guardian`, `data-consistency-checker`, `ux-krug-reviewer`,
 `simple-design-reviewer` y `ux-fidelity-reviewer`:
 
-- PRD técnico (de dónde sale el stack): ARCHITECTURE.md (stack: FastAPI + Uvicorn + Gemini + SQLAlchemy + PostgreSQL + Google APIs + Meta + EspoCRM + Firebird)
-- Frontera de servicios externos / IA: Gemini (LLM function-calling) + Google APIs (Calendar, Gmail) + Meta Cloud API (WhatsApp) + EspoCRM (CRM) + Firebird (licencias)
-- Qué lógica debe ser determinista (nada de IA ahí): SQLAlchemy queries + function-calling routing + input validation (sanitización de scripts/SQL) + audit logging (scrubbing de secretos)
-- Categorías de dato sensible / PII regulada: OAuth tokens (Google), API credentials (Meta), chat history, teléfono usuario
-- Dónde viven los secretos server-side: DATABASE_URL, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, META_API_TOKEN, FIREBIRD_HOST, FIREBIRD_USER, FIREBIRD_PASSWORD, NocoDB credenciales, cloudflared tunnel token (todos en .env/volúmenes Docker, nunca en cliente)
-- Decisiones de alto impacto que necesitan explicabilidad en la UX: Escalar caso a humano (requiere contexto conversacional), Reclasificar usuario como sin_licencia (afecta ofertas posteriores), Crear cita Google (commit externo), Validar elegibilidad para soporte (basada en Firebird)
-- Fuente de diseño / referencia visual del proyecto: N/A — Bot de WhatsApp conversacional sin UI web. Interfaz es chat nativo de WhatsApp.
+- PRD técnico (de dónde sale el stack): {{PRD_TECH_PATH}}
+- Frontera de servicios externos / IA: {{EXTERNAL_SERVICE_LAYER}}
+- Qué lógica debe ser determinista (nada de IA ahí): {{DETERMINISTIC_LAYER}}
+- Categorías de dato sensible / PII regulada: {{SENSITIVE_DATA_CATEGORIES}}
+- Dónde viven los secretos server-side: {{SERVER_SIDE_SECRETS}}
+- Decisiones de alto impacto que necesitan explicabilidad en la UX: {{HIGH_STAKES_DECISIONS}}
+- Fuente de diseño / referencia visual del proyecto: {{DESIGN_SOURCE}}
 
 Si algún punto sigue mostrando `{{...}}`, todavía no corriste `/build:setup`.
 

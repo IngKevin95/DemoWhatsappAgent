@@ -63,7 +63,7 @@ class TestRecibirWebhook:
         """Webhook endpoint is accessible."""
         assert client is not None
         from unittest.mock import patch
-        with patch('agent.main.proveedor') as mock_proveedor:
+        with patch('agent.main.proveedor_meta') as mock_proveedor:
             mock_proveedor.validar_firma.return_value = False
             response = client.post("/webhook", json={"entry": []}, headers={"X-Hub-Signature-256": "sha256=invalid"})
             assert response.status_code in [403, 400]
@@ -104,7 +104,7 @@ class TestWebhookInputValidation:
         """Malformed JSON request rejected."""
         if client is None:
             pytest.skip("App not available")
-        with patch('agent.main.proveedor') as mock_proveedor:
+        with patch('agent.main.proveedor_meta') as mock_proveedor:
             mock_proveedor.validar_firma.return_value = False
             response = client.post(
                 "/webhook",
@@ -117,7 +117,7 @@ class TestWebhookInputValidation:
         """Empty webhook body handled gracefully."""
         if client is None:
             pytest.skip("App not available")
-        with patch('agent.main.proveedor') as mock_proveedor:
+        with patch('agent.main.proveedor_meta') as mock_proveedor:
             mock_proveedor.validar_firma.return_value = False
             response = client.post(
                 "/webhook",
@@ -130,7 +130,7 @@ class TestWebhookInputValidation:
         """Webhook without 'entry' field rejected."""
         if client is None:
             pytest.skip("App not available")
-        with patch('agent.main.proveedor') as mock_proveedor:
+        with patch('agent.main.proveedor_meta') as mock_proveedor:
             mock_proveedor.validar_firma.return_value = False
             response = client.post(
                 "/webhook",
@@ -147,7 +147,7 @@ class TestWebhookEdgeCases:
         """Webhook with very long message handled."""
         if client is None:
             pytest.skip("App not available")
-        with patch('agent.main.proveedor') as mock_proveedor:
+        with patch('agent.main.proveedor_meta') as mock_proveedor:
             mock_proveedor.validar_firma.return_value = False
             long_msg = "A" * 10000
             response = client.post(
@@ -172,7 +172,7 @@ class TestWebhookEdgeCases:
         """Webhook with unicode characters handled."""
         if client is None:
             pytest.skip("App not available")
-        with patch('agent.main.proveedor') as mock_proveedor:
+        with patch('agent.main.proveedor_meta') as mock_proveedor:
             mock_proveedor.validar_firma.return_value = False
             response = client.post(
                 "/webhook",

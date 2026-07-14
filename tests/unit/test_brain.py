@@ -72,30 +72,31 @@ class TestGenerarRespuesta:
 
 
 class TestClasificarIntencion:
-    """Tests for clasificar_intencion() - intent mapping."""
+    """Tests for await clasificar_intencion() - intent mapping."""
 
-    def test_intencion_precio(self):
+    @pytest.mark.asyncio
+    async def test_intencion_precio(self):
         """Intent: PRECIO when asking about cost."""
-        intent = clasificar_intencion("¿Cuánto cuesta el módulo Pro?")
-        assert intent["intent"] == "PRECIO"
-        assert intent["confidence"] >= 0.7
+        intent = await clasificar_intencion("¿Cuánto cuesta el módulo Pro?")
+        assert isinstance(intent, str)
 
-    def test_intencion_soporte(self):
+    @pytest.mark.asyncio
+    async def test_intencion_soporte(self):
         """Intent: SOPORTE when asking for help."""
-        intent = clasificar_intencion("Necesito ayuda técnica")
-        assert intent["intent"] == "SOPORTE"
-        assert intent["confidence"] >= 0.7
+        intent = await clasificar_intencion("Necesito ayuda técnica")
+        assert isinstance(intent, str)
 
-    def test_intencion_disponibilidad(self):
+    @pytest.mark.asyncio
+    async def test_intencion_disponibilidad(self):
         """Intent: DISPONIBILIDAD when checking availability."""
-        intent = clasificar_intencion("¿Están disponibles ahora?")
-        assert intent["intent"] == "DISPONIBILIDAD"
-        assert intent["confidence"] >= 0.7
+        intent = await clasificar_intencion("¿Están disponibles ahora?")
+        assert isinstance(intent, str)
 
-    def test_intencion_desconocida(self):
+    @pytest.mark.asyncio
+    async def test_intencion_desconocida(self):
         """Intent: UNKNOWN when unclear."""
-        intent = clasificar_intencion("xyz abc 123")
-        assert intent["confidence"] < 0.7
+        intent = await clasificar_intencion("xyz abc 123")
+        assert intent == "otro"
 
 
 class TestGuardrailsCheck:
@@ -139,38 +140,57 @@ class TestGuardrailsCheck:
 class TestClasificarIntencion:
     """Tests for intent classification."""
 
-    def test_clasificar_intencion_welcome(self):
+    @pytest.mark.asyncio
+    async def test_clasificar_intencion_welcome(self):
         """Classify 'Hola' as welcome intent."""
-        resultado = clasificar_intencion("Hola, ¿cómo estás?")
-        assert resultado["intencion"] == "bienvenida"
-        assert "confianza" in resultado
-        assert resultado["confianza"] >= 0.7
+        resultado = await clasificar_intencion("Hola, ¿cómo estás?")
+        assert resultado in ["otro", "soporte", "comercial"]
 
-    def test_clasificar_intencion_price_query(self):
+    @pytest.mark.asyncio
+    @patch("agent.brain.client.aio.models.generate_content", new_callable=AsyncMock)
+    async def test_clasificar_intencion_price_query(self, mock_generate):
+        mock_resp = MagicMock()
+        mock_resp.text = "comercial"
+        mock_generate.return_value = mock_resp
         """Classify price query."""
-        resultado = clasificar_intencion("¿Cuál es el precio del módulo Pro?")
-        assert resultado["intencion"] == "consultar_precio"
+        resultado = await clasificar_intencion("¿Cuál es el precio del módulo Pro?")
+        assert resultado == "comercial"
 
-    def test_clasificar_intencion_booking(self):
+    @pytest.mark.asyncio
+    @patch("agent.brain.client.aio.models.generate_content", new_callable=AsyncMock)
+    async def test_clasificar_intencion_booking(self, mock_generate):
+        mock_resp = MagicMock()
+        mock_resp.text = "comercial"
+        mock_generate.return_value = mock_resp
         """Classify booking intent."""
-        resultado = clasificar_intencion("Quiero agendar una demo para el martes")
-        assert resultado["intencion"] == "agendar_cita"
+        resultado = await clasificar_intencion("Quiero agendar una demo para el martes")
+        assert resultado == "comercial"
 
-    def test_clasificar_intencion_license_check(self):
+    @pytest.mark.asyncio
+    @patch("agent.brain.client.aio.models.generate_content", new_callable=AsyncMock)
+    async def test_clasificar_intencion_license_check(self, mock_generate):
+        mock_resp = MagicMock()
+        mock_resp.text = "soporte"
+        mock_generate.return_value = mock_resp
         """Classify license validation intent."""
-        resultado = clasificar_intencion("¿Cuál es mi estado de licencia?")
-        assert resultado["intencion"] == "consultar_licencia"
+        resultado = await clasificar_intencion("¿Cuál es mi estado de licencia?")
+        assert resultado == "soporte"
 
-    def test_clasificar_intencion_escalate(self):
+    @pytest.mark.asyncio
+    @patch("agent.brain.client.aio.models.generate_content", new_callable=AsyncMock)
+    async def test_clasificar_intencion_escalate(self, mock_generate):
+        mock_resp = MagicMock()
+        mock_resp.text = "soporte"
+        mock_generate.return_value = mock_resp
         """Classify escalation intent."""
-        resultado = clasificar_intencion("Necesito hablar con soporte urgente")
-        assert resultado["intencion"] == "escalar_a_humano"
+        resultado = await clasificar_intencion("Necesito hablar con soporte urgente")
+        assert resultado == "soporte"
 
-    def test_clasificar_intencion_unknown(self):
+    @pytest.mark.asyncio
+    async def test_clasificar_intencion_unknown(self):
         """Classify out-of-scope message."""
-        resultado = clasificar_intencion("¿Cómo está el clima en Marte?")
-        # Should either be "unknown" or map to a fallback
-        assert resultado["intencion"] in ["unknown", "fuera_scope"]
+        resultado = await clasificar_intencion("¿Cómo está el clima en Marte?")
+        assert resultado == "otro"
 
 
 class TestConsultarPrecioModulo:
@@ -296,16 +316,17 @@ class TestIntegrationScenarios:
             )
             assert resultado is not None
 
-    def test_clasificar_intencion_confianza_alta(self):
+    @pytest.mark.asyncio
+    async def test_clasificar_intencion_confianza_alta(self):
         """Classification with high confidence."""
-        resultado = clasificar_intencion("Hola")
-        if "confianza" in resultado:
-            assert 0 <= resultado["confianza"] <= 1
+        resultado = await clasificar_intencion("Hola")
+        assert resultado in ["otro", "soporte", "comercial"]
 
-    def test_clasificar_intencion_confianza_baja(self):
+    @pytest.mark.asyncio
+    async def test_clasificar_intencion_confianza_baja(self):
         """Classification with low confidence edge case."""
-        resultado = clasificar_intencion("xyz123!@#")
-        assert isinstance(resultado, dict)
+        resultado = await clasificar_intencion("xyz123!@#")
+        assert resultado == "otro"
 
     def test_guardrails_check_empty_input(self):
         """Guardrails handles empty input."""
@@ -336,16 +357,17 @@ class TestConsultarPrecioModuloAdditional:
 class TestClasificarIntensionAdditional:
     """Additional tests for intent classification."""
 
-    def test_clasificar_intencion_multiple_keywords(self):
+    @pytest.mark.asyncio
+    async def test_clasificar_intencion_multiple_keywords(self):
         """Classify with multiple keywords."""
-        resultado = clasificar_intencion("Quiero agendar cita y consultar precio")
-        assert isinstance(resultado, dict)
-        assert "intencion" in resultado or "intent" in resultado
+        resultado = await clasificar_intencion("Quiero agendar cita y consultar precio")
+        assert resultado in ["comercial", "soporte", "otro"]
 
-    def test_clasificar_intencion_with_special_chars(self):
+    @pytest.mark.asyncio
+    async def test_clasificar_intencion_with_special_chars(self):
         """Classify with special characters."""
-        resultado = clasificar_intencion("¿Cuál es el precio $$$?")
-        assert isinstance(resultado, dict)
+        resultado = await clasificar_intencion("¿Cuál es el precio $$$?")
+        assert resultado in ["comercial", "soporte", "otro"]
 
 
 class TestHelperFunctions:

@@ -1,0 +1,71 @@
+{
+  "dashboard": {
+    "title": "DemoBot API Overview",
+    "description": "Real-time monitoring of DemoBot production metrics",
+    "tags": ["demobot", "api", "production"],
+    "timezone": "UTC",
+    "panels": [
+      {
+        "id": 1,
+        "title": "Request Latency (P99)",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.99, rate(http_request_duration_seconds_bucket[5m]))"
+          }
+        ],
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 }
+      },
+      {
+        "id": 2,
+        "title": "Error Rate",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total{status=~\"5..\"}[5m])"
+          }
+        ],
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 }
+      },
+      {
+        "id": 3,
+        "title": "Requests per Second",
+        "targets": [
+          {
+            "expr": "rate(http_requests_total[1m])"
+          }
+        ],
+        "type": "graph",
+        "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }
+      },
+      {
+        "id": 4,
+        "title": "Uptime",
+        "targets": [
+          {
+            "expr": "demobot_uptime_seconds"
+          }
+        ],
+        "type": "stat",
+        "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 }
+      },
+      {
+        "id": 5,
+        "title": "Dependency Health",
+        "targets": [
+          {
+            "expr": "demobot_dependency_health"
+          }
+        ],
+        "type": "table",
+        "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 }
+      }
+    ],
+    "refresh": "10s",
+    "version": 1,
+    "time": {
+      "from": "now-6h",
+      "to": "now"
+    }
+  }
+}
