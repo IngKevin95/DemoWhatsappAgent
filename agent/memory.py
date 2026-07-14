@@ -14,9 +14,9 @@ class Mensaje(Base):
     area_id: área a la que pertenecía el contacto al momento del mensaje (NULL si aún
     no escalado). Útil para reportes por área sin depender del estado actual del contacto."""
     __tablename__ = "mensajes"
-
     id = Column(Integer, primary_key=True)
     telefono = Column(String, ForeignKey("contactos.telefono"), index=True)
+    conversacion_id = Column(Integer, ForeignKey("conversaciones.id"), nullable=True)
     role = Column(String)
     content = Column(String)
     area_id = Column(Integer, ForeignKey("areas.id"), nullable=True)
@@ -28,10 +28,45 @@ async def inicializar_db():
         await conn.run_sync(Base.metadata.create_all)
 
 
-async def guardar_mensaje(telefono: str, role: str, content: str, area_id: int | None = None):
+async def guardar_mensaje(telefono: str, role: str, content: str, area_id: int | None = None, conversacion_id: int | None = None):
     async with SessionLocal() as session:
-        session.add(Mensaje(telefono=telefono, role=role, content=content, area_id=area_id))
+        session.add(Mensaje(telefono=telefono, role=role, content=content, area_id=area_id, conversacion_id=conversacion_id))
         await session.commit()
+
+
+async def abrir_conversacion(telefono: str) -> int:
+    from .db import Conversacion
+    async with SessionLocal() as session:
+        conv = Conversacion(telefono=telefono, estado="abierta")
+        session.add(conv)
+        await session.commit()
+        await session.refresh(conv)
+        return conv.id
+
+
+async def cerrar_conversacion(conversacion_id: int) -> bool:
+    from .db import Conversacion
+    async with SessionLocal() as session:
+        result = await session.execute(select(Conversacion).where(Conversacion.id == conversacion_id))
+        conv = result.scalars().first()
+        if conv:
+            conv.estado = "cerrada"
+            await session.commit()
+            return True
+        return False
+
+
+async def obtener_conversacion_activa(telefono: str) -> int | None:
+    from .db import Conversacion
+    async with SessionLocal() as session:
+        result = await session.execute(
+            select(Conversacion)
+            .where(Conversacion.telefono == telefono, Conversacion.estado == "abierta")
+            .order_by(Conversacion.id.desc())
+            .limit(1)
+        )
+        conv = result.scalars().first()
+        return conv.id if conv else None
 
 
 async def obtener_historial(telefono: str, limite: int = 20) -> list[dict]:
