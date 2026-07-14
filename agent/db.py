@@ -23,8 +23,10 @@ class Base(DeclarativeBase):
 class Auditoria:
     """Mixin: creado_en/actualizado_en, mantenidos infaliblemente por trigger de Postgres
     (ver migración) para que también cubran escrituras directas desde NocoDB."""
-    creado_en = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    actualizado_en = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    # naive UTC: las columnas son TIMESTAMP WITHOUT TIME ZONE. asyncpg rechaza
+    # datetimes tz-aware contra esas columnas (psycopg2 los toleraba en silencio).
+    creado_en = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    actualizado_en = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
 
 class Modulo(Auditoria, Base):
