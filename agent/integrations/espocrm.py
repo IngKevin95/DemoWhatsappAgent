@@ -45,6 +45,10 @@ def crear_lead(nombre: str, telefono: str, empresa: str, correo: str, interes: s
     if correo and _EMAIL_RE.match(correo.strip()):
         body["emailAddress"] = correo.strip()
     r = httpx.post(f"{BASE_URL}/api/v1/Lead", json=body, headers=_headers(), timeout=TIMEOUT)
+    # 409 = EspoCRM detectó lead duplicado (mismo teléfono/nombre). Es idempotente:
+    # el lead ya existe, no es un fallo. Devolver el existente sin reintentar.
+    if r.status_code == 409:
+        return consultar_lead(telefono) or {}
     r.raise_for_status()
     return r.json()
 
