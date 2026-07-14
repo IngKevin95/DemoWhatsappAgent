@@ -1,5 +1,6 @@
 """Prometheus metrics instrumentation tests"""
 import pytest
+from unittest.mock import AsyncMock, patch
 from starlette.testclient import TestClient
 from agent.main import app
 
@@ -7,6 +8,16 @@ from agent.main import app
 @pytest.fixture
 def client():
     return TestClient(app)
+
+
+@pytest.fixture
+def client_mocked_probes():
+    """TestClient with DB/external probes mocked to avoid real connections."""
+    with patch("agent.main.probe_postgres", new=AsyncMock(return_value="ok")), \
+         patch("agent.main.probe_firebird", new=AsyncMock(return_value="ok")), \
+         patch("agent.main.probe_gemini", new=AsyncMock(return_value="ok")), \
+         patch("agent.main.probe_espocrm", new=AsyncMock(return_value="ok")):
+        yield TestClient(app)
 
 
 class TestPrometheusMetrics:
@@ -20,11 +31,11 @@ class TestPrometheusMetrics:
         # Should contain HELP/TYPE lines
         assert '# HELP' in response.text or '# TYPE' in response.text
 
-    def test_metrics_includes_real_request_metrics(self, client):
+    def test_metrics_includes_real_request_metrics(self, client_mocked_probes):
         """RED: /metrics should track actual HTTP requests"""
         # Make a request first
-        client.get('/health')
-        response = client.get('/metrics')
+        client_mocked_probes.get('/health')
+        response = client_mocked_probes.get('/metrics')
         text = response.text
         # Should have request counters/histograms
         assert ('http_requests_total' in text or 'demobot_requests' in text or
@@ -39,13 +50,13 @@ class TestPrometheusMetrics:
                 'request_duration' in text.lower() or
                 'latency' in text.lower())
 
-    def test_metrics_updates_after_requests(self, client):
+    def test_metrics_updates_after_requests(self, client_mocked_probes):
         """RED: Metrics should increment after actual requests"""
-        metrics_before = client.get('/metrics').text
+        metrics_before = client_mocked_probes.get('/metrics').text
         # Make some requests
         for _ in range(3):
-            client.get('/health')
-        metrics_after = client.get('/metrics').text
+            client_mocked_probes.get('/health')
+        metrics_after = client_mocked_probes.get('/metrics').text
         # Metrics should differ (counters should increment)
         # Not a string comparison, but proof that metrics are live
         assert len(metrics_after) > 0
