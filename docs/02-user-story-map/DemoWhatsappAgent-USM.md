@@ -224,16 +224,16 @@
 | Búsqueda (RAG) | ✅ **Completo** | Diferenciador, realista en 2-3 sem |
 | Agendar cita + Licencias | ✅ **Completo** | High-value, integraciones Google + Firebird |
 | Escalación inteligente | ✅ **Completo** | Cierre de loop, necesario para confianza |
-| Confirmación de cita | ⚠️ **Mínimo** | Email básico + notificación a Soporte (HU-011b); lead digest automático = v1.1 |
-| Cierre de conversación | ⚠️ **Mínimo** | Detección de fin de sesión + cierre graceful (HU-024/025); follow-up automático = v1.1 |
-| Lead nurturing automático | ❌ **v1.1** | Requiere scheduler robusto (EP-005 foundation); manual: OK en v1.0 |
-| Multi-canal (Telegram, SMS) | ❌ **v1.1** | Fase 2 después de estabilizar WhatsApp |
-| Rich media (botones, carruseles) | ❌ **v1.1** | Constrains v1: solo texto |
+| Confirmación de cita | ⚠️ **Mínimo** | Email básico + notificación a Soporte (HU-011b); lead digest automático = Fase 2 |
+| Cierre de conversación | ⚠️ **Mínimo** | Detección de fin de sesión + cierre graceful (HU-024/025); follow-up automático = Fase 2 |
+| Lead nurturing automático | ❌ **Fase 2** | Requiere scheduler robusto (EP-005 foundation); manual: OK en v1.0 |
+| Multi-canal (Telegram, SMS) | ❌ **Fase 2** | Fase 2 después de estabilizar WhatsApp |
+| Rich media (botones, carruseles) | ❌ **Fase 2** | Constrains v1: solo texto |
 
 ### Esfuerzo Estimado
 
 **MVP (v1.0):** 5 épicas × 6 sem = ~30 person-weeks  
-**Extras para v1.1:** EP-004b (RAG refinement), multi-channel, rich media = +2-3 sem
+**Extras para Fase 2:** EP-004b (RAG refinement), multi-channel, rich media = +2-3 sem
 
 ---
 
@@ -311,7 +311,7 @@ Todas las tres perspectivas están mapeadas, pero el backbone sigue el journey c
 - Cierre de conversación (detección de fin, inactividad)
 
 **Postergado a fases futuras:**
-- v1.1: RAG (búsqueda semántica), follow-up automático avanzado
+- Fase 2: RAG (búsqueda semántica), follow-up automático avanzado
 - v1.2: Multi-channel (Telegram, SMS), rich media, analytics
 - v2.0: Salesforce sync, AI recomendaciones, custom training
 

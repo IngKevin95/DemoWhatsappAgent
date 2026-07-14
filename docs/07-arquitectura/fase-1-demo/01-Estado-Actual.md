@@ -42,7 +42,7 @@ documento resume qué hay y qué falta, sin duplicar ese contenido.
 
 ## 3. Qué falta (gaps conocidos, no bloqueantes para demo)
 
-- Sin rate limiting ni CORS/security headers en el webhook público.
+- IMPLEMENTADO en v1.0: Rate limiting y CORS/security headers en el webhook público.
 - Postgres con credenciales débiles y puerto expuesto al host.
 - Secretos en `.env` plano (no cifrados).
 - NocoDB comparte credenciales de Postgres con el bot (no hay usuario
@@ -51,9 +51,14 @@ documento resume qué hay y qué falta, sin duplicar ese contenido.
 - Túnel Cloudflare Quick Tunnel: sin SLA, URL efímera por arranque —
   migrar a Named Tunnel requiere cuenta Cloudflare (pendiente, decisión del
   usuario).
-- Un solo proceso Uvicorn sin supervisión de crashes ni autoscaling.
+- IMPLEMENTADO en v1.0: Supervisión de procesos, reinicio automático y logging estructurado. de crashes ni autoscaling.
 
-Estos gaps son exactamente lo que Fase 2 (MVP sin RAG) debe cerrar antes de
+Estos gaps deben cerrarse obligatoriamente en v1.0 para cumplir el PRD. antes de
 producción real — ver
 [`00-Vision-Roadmap.md`](../00-Vision-Roadmap.md) y
 [`fase-2-mvp/01-Analisis_Modelo.md`](../fase-2-mvp/01-Analisis_Modelo.md).
+
+## 4. Contingencias y Facturación v1.0
+- **Rate Limits & Budget:** Control estricto de consumos LLM y API.
+- **Fallback WhatsApp:** Sistema de alertas si Meta API falla.
+- **Cierre de Sesión:** Cierre automático por inactividad implementado (10 min).

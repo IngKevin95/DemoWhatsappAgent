@@ -164,10 +164,10 @@ Incluye: HU-027 (CI/CD 3 stages)
 1. **Orden de Sprints:** Sprint 1 (Quick Wins) → Sprint 2 (Strategic) → Sprint 3 (Fill-ins)
 2. **Parallelización:** EP-001 (sprints 1-2) y EP-005 (sprint 1+) son independientes; posible paralelizar si hay equipo
 3. **MVP Gate:** Después de Sprint 2 (~26-28 pts), MVP cubre escalación completa (bienvenida + consultas + agendar + escalación + cierre)
-4. **Futuro (v1.1+):** Búsqueda semántica (RAG), follow-up automático, multi-canal — fuera de alcance Fase 1
+4. **Futuro (Fase 2):** Búsqueda semántica (RAG), follow-up automático, multi-canal — fuera de alcance Fase 1
 
 ---
 
 **Generado:** 2026-07-12  
-**Versión:** 5 (Fase 1 Demo final, v1.1+ ELIMINADAS)  
+**Versión:** 5 (Fase 1 Demo final, Fase 2 ELIMINADAS)  
 **Estado:** 17 HU v1.0 priorizadas, listo para `/build:setup`

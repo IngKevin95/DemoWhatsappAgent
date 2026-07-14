@@ -260,7 +260,7 @@ DemoWhatsappAgent (FastAPI)
 
 ### Interfaz
 
-- **Medios:** Solo texto en v1 (emoji permitido); v1.1 → botones, carruseles
+- **Medios:** Solo texto en v1 (emoji permitido); Fase 2 → botones, carruseles
 - **Velocidad target:** <30seg respuesta user-facing (incl. Gemini + tool calls)
 - **Error messaging:** Usuario siempre sabe por qué falló ("No tengo esa info documentada" vs. silencio)
 - **Cierre graceful:** Cuando usuario dice "chao" → bot detecta y archiva conversación
@@ -294,7 +294,7 @@ Checklist de verificación post-release:
 
 ### Métricas de Negocio
 
-| Métrica | Target v1 | Target v1.1 |
+| Métrica | Target v1 | Target Fase 2 |
 |---------|-----------|------------|
 | **Cobertura:** % de consultas respondidas por bot (vs. escaladas) | 40% | 60% |
 | **Velocidad:** Tiempo promedio de respuesta | <30 seg | <10 seg |
@@ -333,10 +333,10 @@ Checklist de verificación post-release:
 | Atributo | Requisito | Medición | Rationale |
 |----------|-----------|----------|-----------|
 | **Performance** | P99 <3s (Gemini call + tool execution) | APM instrumentation (OpenTelemetry) | Bot debe responder dentro de tolerancia WhatsApp (~30s visible, <3s ideal) |
-| **Disponibilidad** | Uptime 99% v1, 99.9% v1.1+ | Prometheus + alertas en P1 | Servicio debe ser suficientemente confiable para producción demo |
+| **Disponibilidad** | Uptime 99% v1, 99.9% Fase 2 | Prometheus + alertas en P1 | Servicio debe ser suficientemente confiable para producción demo |
 | **Seguridad** | Rate limiting 3-tier (global/IP/user), input validation 100%, secrets no en logs, audit logging en high-stakes tools | Load tests + security tests + log scanning | Proteger contra abuso, inyección, fuga de credenciales, vulnerabilidad a auditoria |
 | **Observabilidad** | Logs estructurados (JSON), trazas distribuidas end-to-end, alertas P1 <15min | Datadog/CloudWatch/Prometheus | Debuggeo eficiente, incident response rápido |
-| **Escalabilidad** | Soportar 100 concurrentes (v1), 1000+ (v1.1) con event loop async | Load testing con Locust | Base de usuarios crece; no regresar por throttling |
+| **Escalabilidad** | Soportar 100 concurrentes (v1), 1000+ (Fase 2) con event loop async | Load testing con Locust | Base de usuarios crece; no regresar por throttling |
 
 ### Integraciones Externas
 
@@ -391,12 +391,12 @@ Checklist de verificación post-release:
 
 ### Out of Scope (v1.0 — Fase 1 Demo)
 
-**Diferidas a v1.1:**
+**Diferidas a Fase 2:**
 - [ ] Security Hardening (EP-003): Rate limiting, input validation, audit logging, encryption at rest
 - [ ] RAG Backend (EP-004): Búsqueda semántica, casos de uso, preguntas técnicas
 - [ ] Go-to-Market (PRD §8): Estrategia de lanzamiento, posicionamiento, gobernanza
 
-### Out of Scope (v1.1+)
+### Out of Scope (Fase 2)
 
 - [ ] Bi-directional sync con Salesforce (solo EspoCRM v1)
 - [ ] Llamadas de voz en WhatsApp
@@ -423,8 +423,8 @@ Checklist de verificación post-release:
 | **EP-001:** Test Suite + Features Negocio (generar_respuesta + hub nodes) | 3 sem | ✅ ACTIVA |
 | **EP-002:** Error Handling & Resilience | 1 sem | ✅ ACTIVA (HU-019 triaje) |
 | **EP-005:** Deployment + Disponibilidad 24/7 | 2 sem | ✅ ACTIVA (HU-003, HU-021) |
-| **EP-003:** Security Hardening (rate limit, audit logging) | 2 sem | 🔄 v1.1 (deferred) |
-| **EP-004:** RAG Backend (buscar_en_conocimiento) | 3 sem | 🔄 v1.1 (deferred) |
+| **EP-003:** Security Hardening (rate limit, audit logging) | 2 sem | ✅ v1.0 |
+| **EP-004:** RAG Backend (buscar_en_conocimiento) | 3 sem | 🔄 Fase 2 (deferred) |
 
 ### Fase 2: Production Deployment (2-3 semanas) — 📅 SIGUIENTE
 
@@ -594,10 +594,14 @@ Checklist de verificación post-release:
 <!-- TODO: Validar con Equipo Soporte: % actual de casos que podrían automatizarse (asumimos 40%) -->
 <!-- TODO: Presupuesto Google APIs: ¿está autorizado? Límite mensual? -->
 <!-- TODO: Firebird + EspoCRM: ¿cuándo pasan de demo a producción? Timing? -->
-<!-- TODO: Métricas v1.1: definir NPS survey + implementación -->
+<!-- TODO: Métricas Fase 2: definir NPS survey + implementación -->
 
 ---
 
 **Documento generado:** 2026-07-12  
 **Próximo paso:** `/factory:epicas` (descomponer PRD en épicas)  
 **Revisor asignado:** (pendiente `/factory:revisar`)
+
+## Contingencias (v1.0)
+- **Caída de Meta / Bloqueo:** Notificación automática por email a admin, respuesta SMS/Email al cliente si está disponible.
+- **Presupuesto API:** Hard limit configurado a 50 USD/mes. Si se alcanza, bot responde con mensaje de sistema.
