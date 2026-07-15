@@ -93,7 +93,8 @@ class Contacto(Auditoria, Base):
 
     telefono = Column(String, primary_key=True)
     nombre = Column(String, nullable=False)
-    empresa = Column(String, nullable=True)
+    # empresa vive en clientes.nombre_empresa (perfil de cliente/lead), no aquí:
+    # contactos es "cualquiera que escribe"; los datos de empresa son del cliente.
     correo = Column(String, nullable=True)
     ciudad = Column(String, nullable=True)
     atendido_por = Column(Integer, ForeignKey("agentes.id"), nullable=True)

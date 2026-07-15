@@ -131,7 +131,7 @@ def _sync_lead_crm(telefono: str, interes: str = "") -> dict:
         cliente = session.get(Cliente, telefono)
     if not contacto:
         return {"estado": "error", "mensaje": f"No hay contacto registrado con {telefono}."}
-    empresa = (cliente.nombre_empresa if cliente else None) or contacto.empresa or ""
+    empresa = (cliente.nombre_empresa if cliente else None) or ""
     try:
         lead = espocrm.crear_lead(
             nombre=contacto.nombre, telefono=telefono, empresa=empresa,
@@ -157,9 +157,7 @@ def registrar_lead_crm(
     empleados: str | None = None,
 ) -> dict:
     with SyncSession() as session:
-        contacto = _upsert_contacto(session, telefono, nombre)
-        if empresa:
-            contacto.empresa = empresa
+        _upsert_contacto(session, telefono, nombre)
         _upsert_cliente(
             session, telefono, tipo="lead",
             nombre_empresa=empresa, sector_empresa=sector,
@@ -272,12 +270,13 @@ def guardar_datos_contacto(
     Llamar apenas el usuario los dé, típicamente al inicio de la conversación."""
     with SyncSession() as session:
         contacto = _upsert_contacto(session, telefono, nombre)
-        if empresa is not None:
-            contacto.empresa = empresa
         if correo is not None:
             contacto.correo = correo
         if ciudad is not None:
             contacto.ciudad = ciudad
+        if empresa is not None:
+            # empresa es dato de cliente/lead, no de contacto -> clientes.nombre_empresa
+            _upsert_cliente(session, telefono, tipo="lead", nombre_empresa=empresa)
         session.commit()
         return {"telefono": telefono, "estado": "guardado"}
 

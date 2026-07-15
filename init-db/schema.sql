@@ -73,7 +73,6 @@ ALTER TABLE ONLY public.modulos ALTER COLUMN id SET DEFAULT nextval('public.modu
 CREATE TABLE public.contactos (
     telefono             character varying NOT NULL,
     nombre               character varying NOT NULL,
-    empresa              character varying,
     correo               character varying,
     ciudad               character varying,
     atendido_por         integer,                             -- FK -> agentes.id (abajo)
