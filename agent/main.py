@@ -202,12 +202,14 @@ async def _revisar_inactividad():
                 
                 # Obtener la conversación activa para relacionar el mensaje
                 conv_id = await obtener_conversacion_activa(telefono)
+                if not conv_id:
+                    continue
 
                 with SyncSession() as session:
                     contacto = session.query(Contacto).filter(Contacto.telefono == telefono).first()
                     canal = contacto.canal if contacto else "meta"
                 
-                if m["role"] == "user" and segundos > CHECKIN_INACTIVIDAD_SEGUNDOS:
+                if (m["role"] == "user" or (m["role"] == "assistant" and m["content"] not in (MENSAJE_CHECKIN_1, MENSAJE_CHECKIN_2, MENSAJE_CIERRE))) and segundos > CHECKIN_INACTIVIDAD_SEGUNDOS:
                     await guardar_mensaje(telefono, "assistant", MENSAJE_CHECKIN_1, conversacion_id=conv_id)
                     await enviar_mensaje_seguro(telefono, MENSAJE_CHECKIN_1, canal=canal)
                 elif m["role"] == "assistant" and m["content"] == MENSAJE_CHECKIN_1 and segundos > CHECKIN_INACTIVIDAD_SEGUNDOS:
