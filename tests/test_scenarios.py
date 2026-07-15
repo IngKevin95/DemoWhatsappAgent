@@ -31,7 +31,7 @@ import httpx
 
 from agent import tools  # noqa: E402
 from agent.brain import RESPUESTAS_FALLBACK, generar_respuesta  # noqa: E402
-from agent.db import Cliente, ColaEspera, Contacto, SyncSession  # noqa: E402
+from agent.db import Cliente, Contacto, SyncSession  # noqa: E402
 from agent.integrations import espocrm  # noqa: E402
 from agent.memory import guardar_mensaje, inicializar_db, obtener_historial  # noqa: E402
 
@@ -109,8 +109,19 @@ def check_side_effect(efecto: dict, telefono: str) -> tuple[bool, str]:
         return True, ""
 
     if tipo == "escalamiento_registrado":
+        from agent.db import Conversacion
         with SyncSession() as session:
-            en_cola = session.get(ColaEspera, telefono)
+            conv_cola = (
+                session.query(Conversacion)
+                .filter(
+                    Conversacion.telefono == telefono,
+                    Conversacion.estado == "abierta",
+                    Conversacion.espera_desde.isnot(None),
+                    Conversacion.espera_hasta.is_(None)
+                )
+                .first()
+            )
+            en_cola = conv_cola is not None
             contacto = session.get(Contacto, telefono)
         conectado = contacto and contacto.atendido_por is not None
         if not en_cola and not conectado:
@@ -130,7 +141,7 @@ async def correr_caso(caso: dict) -> tuple[bool, list[str]]:
         # Clean up database records for this phone number
         session.query(Mensaje).filter(Mensaje.telefono == telefono).delete()
         session.query(Conversacion).filter(Conversacion.telefono == telefono).delete()
-        for modelo in (Cliente, ColaEspera, Contacto):
+        for modelo in (Cliente, Contacto):
             obj = session.get(modelo, telefono)
             if obj:
                 session.delete(obj)

@@ -15,7 +15,7 @@ from pathlib import Path
 import firebird.driver as fb
 import httpx
 
-from .db import Agente, Area, Cliente, ColaEspera, Contacto, Modulo, Oferta, Parametro, Radicado, SyncSession
+from .db import Agente, Area, Cliente, Contacto, Modulo, Oferta, Parametro, Radicado, SyncSession, Combo
 from .integrations import espocrm
 from .integrations.google import crear_evento_calendar, enviar_email, horarios_libres
 
@@ -95,15 +95,43 @@ def consultar_precio_modulo(modulo: str) -> dict:
             return {"error": f"Módulo '{modulo}' no encontrado."}
         oferta = _oferta_activa(session, mod.id)
         if not oferta:
-            return {"modulo": mod.nombre, "precio_mensual_cop": mod.precio_mensual_cop, "moneda": "COP"}
+            return {
+                "modulo": mod.nombre,
+                "precio_anual_cop": mod.precio_mensual_cop,
+                "precio_mensual_cop": mod.precio_mensual_cop,
+                "periodo": "anual",
+                "soporte": "incluye soporte técnico por un año",
+                "moneda": "COP"
+            }
         precio_final = round(mod.precio_mensual_cop * (1 - oferta.descuento_pct / 100))
         return {
             "modulo": mod.nombre,
+            "precio_anual_cop": precio_final,
             "precio_mensual_cop": precio_final,
             "precio_regular_cop": mod.precio_mensual_cop,
             "descuento_pct": oferta.descuento_pct,
+            "periodo": "anual",
+            "soporte": "incluye soporte técnico por un año",
             "moneda": "COP",
         }
+
+
+def consultar_combos() -> list[dict]:
+    """Consulta la lista de combos y paquetes de módulos con sus precios especiales anuales."""
+    with SyncSession() as session:
+        combos = session.query(Combo).all()
+        return [
+            {
+                "nombre": c.nombre,
+                "descripcion": c.descripcion,
+                "modulos": c.modulos,
+                "precio_anual_cop": c.precio_anual_cop,
+                "moneda": "COP",
+                "periodo": "anual",
+                "soporte": "incluye soporte técnico por un año"
+            }
+            for c in combos
+        ]
 
 
 def consultar_ofertas_activas() -> list[dict]:
@@ -561,17 +589,19 @@ def escalar_a_humano(telefono: str, nombre: str, resumen_caso: str, area: str) -
         # todos ocupados -> cola
         radicado.estado = "en_cola"
         delante = (
-            session.query(ColaEspera)
-            .filter(ColaEspera.area_id == area_row.id, ColaEspera.hasta.is_(None))
+            session.query(Conversacion)
+            .join(Radicado, Conversacion.radicado_id == Radicado.id)
+            .filter(
+                Radicado.area_id == area_row.id,
+                Conversacion.espera_desde.isnot(None),
+                Conversacion.espera_hasta.is_(None),
+                Conversacion.id != (conv.id if conv else -1),
+            )
             .count()
         )
-        espera = session.get(ColaEspera, telefono)
-        if espera:
-            espera.area_id = area_row.id
-            espera.desde = datetime.now(timezone.utc)
-            espera.hasta = None
-        else:
-            session.add(ColaEspera(telefono=telefono, area_id=area_row.id))
+        if conv:
+            conv.espera_desde = datetime.now(timezone.utc)
+            conv.espera_hasta = None
         session.commit()
         return {
             "caso_id": caso_id, "estado": "en_cola", "posicion": delante + 1,
@@ -588,29 +618,52 @@ def promover_colas() -> list[dict]:
     Se llama en cada webhook (no hay scheduler). Devuelve [{telefono, mensaje}] a notificar."""
     promovidos = []
     with SyncSession() as session:
+        from .db import Conversacion
         numero_bot = session.query(Parametro).filter(Parametro.clave == "whatsapp_numero_bot").first()
         ocupados = _ocupados()
-        areas = session.query(Area).join(ColaEspera, ColaEspera.area_id == Area.id).distinct().all()
+        areas = (
+            session.query(Area)
+            .join(Radicado, Radicado.area_id == Area.id)
+            .join(Conversacion, Conversacion.radicado_id == Radicado.id)
+            .filter(
+                Conversacion.espera_desde.isnot(None),
+                Conversacion.espera_hasta.is_(None)
+            )
+            .distinct()
+            .all()
+        )
         for area_row in areas:
             libres = [
                 a for a in _agentes_por_area(session, area_row.nombre)
                 if a.id not in ocupados and a.telefono and numero_bot and a.telefono == numero_bot.valor
             ]
             cola = (
-                session.query(ColaEspera)
-                .filter(ColaEspera.area_id == area_row.id, ColaEspera.hasta.is_(None))
-                .order_by(ColaEspera.desde)
+                session.query(Conversacion)
+                .join(Radicado, Conversacion.radicado_id == Radicado.id)
+                .filter(
+                    Radicado.area_id == area_row.id,
+                    Conversacion.espera_desde.isnot(None),
+                    Conversacion.espera_hasta.is_(None)
+                )
+                .order_by(Conversacion.espera_desde)
                 .all()
             )
-            for agente, espera in zip(libres, cola):
-                contacto = session.get(Contacto, espera.telefono)
+            for agente, conv_espera in zip(libres, cola):
+                contacto = session.get(Contacto, conv_espera.telefono)
                 contacto.atendido_por = agente.id
                 contacto.conectado_en = datetime.now(timezone.utc)
                 ocupados.add(agente.id)
-                espera.agente_id = agente.id
-                espera.hasta = datetime.now(timezone.utc)
+                
+                conv_espera.espera_hasta = datetime.now(timezone.utc)
+                
+                radicado = session.get(Radicado, conv_espera.radicado_id)
+                if radicado:
+                    radicado.agente_id = agente.id
+                    radicado.estado = "escalado"
+                    radicado.modo = "conectado"
+                    
                 promovidos.append({
-                    "telefono": espera.telefono,
+                    "telefono": conv_espera.telefono,
                     "mensaje": f"¡Ya te toca {contacto.nombre}! {agente.nombre} te va a atender ahora, un momento.",
                 })
         session.commit()
@@ -657,6 +710,8 @@ def finalizar_conversacion(telefono: str, motivo_cierre: str = "usuario") -> dic
         if conv:
             conv.estado = "cerrada"
             conv.motivo_cierre = motivo_cierre
+            if conv.espera_desde and not conv.espera_hasta:
+                conv.espera_hasta = datetime.now(timezone.utc)
             session.commit()
             return {"status": "cerrada", "motivo": motivo_cierre}
         return {"status": "error", "mensaje": "No hay conversación abierta para cerrar."}
