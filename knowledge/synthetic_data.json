@@ -1,0 +1,196 @@
+[
+  {
+    "query": "¿Cuánto cuesta la licencia del módulo de Nómina?",
+    "intent": "comercial",
+    "file": "sysplus_modulos.md",
+    "section": "Nómina",
+    "expected_entities": {
+      "modulo": "Nómina"
+    },
+    "ground_truth": "Liquidación de nómina electrónica, seguridad social, prestaciones sociales, préstamos y descuentos, certificados laborales."
+  },
+  {
+    "query": "precio modulo contabilidad anual",
+    "intent": "comercial",
+    "file": "sysplus_modulos.md",
+    "section": "Contabilidad",
+    "expected_entities": {
+      "modulo": "Contabilidad"
+    },
+    "ground_truth": "Plan de cuentas configurable, causación automática desde todos los módulos, estados financieros NIIF, centros de costo, cierre de períodos."
+  },
+  {
+    "query": "Hola, me interesa saber los precios de los combos de facturación e inventario",
+    "intent": "comercial",
+    "file": "comercial.md",
+    "section": "Productos relacionados",
+    "expected_entities": {
+      "tema": "combos"
+    },
+    "ground_truth": "ERP SysPlus, CRM, Facturación Electrónica, Inventarios, Contabilidad..."
+  },
+  {
+    "query": "¿Qué módulos incluye el Combo Emprendedor?",
+    "intent": "comercial",
+    "file": "comercial.md",
+    "section": "Preguntas frecuentes",
+    "expected_entities": {
+      "combo": "Combo Emprendedor"
+    },
+    "ground_truth": "El ERP está compuesto por módulos independientes que pueden implementarse según las necesidades..."
+  },
+  {
+    "query": "Tienen algun paquete economico para punto de venta pos?",
+    "intent": "comercial",
+    "file": "sysplus_modulos.md",
+    "section": "POS",
+    "expected_entities": {
+      "modulo": "POS"
+    },
+    "ground_truth": "Punto de venta táctil, múltiples medios de pago, turnos de caja, facturación electrónica en línea, integración con inventario en tiempo real."
+  },
+  {
+    "query": "Tengo un error de factura rechazada por la DIAN, no genera el codigo CUFE",
+    "intent": "soporte",
+    "file": "errores_fallas_comunes_demo.md",
+    "section": "Error: factura electrónica rechazada por DIAN",
+    "expected_entities": {
+      "error": "factura rechazada DIAN"
+    },
+    "ground_truth": "Causas frecuentes: Datos fiscales del cliente incompletos. Resolución DIAN vencida o sin numeración disponible. Certificado digital vencido. Impuestos o retenciones mal configurados."
+  },
+  {
+    "query": "Al intentar facturar me sale que el producto no tiene stock, pero si tengo en la bodega física",
+    "intent": "soporte",
+    "file": "errores_fallas_comunes_demo.md",
+    "section": "Error: producto sin stock al facturar",
+    "expected_entities": {
+      "error": "sin stock"
+    },
+    "ground_truth": "Causas frecuentes: Producto en otra bodega. Entrada de compra no contabilizada. Inventario reservado por pedido. Diferencia entre inventario físico y sistema."
+  },
+  {
+    "query": "No me aparece un pago de cartera en el sistema, la factura sigue vencida",
+    "intent": "soporte",
+    "file": "errores_fallas_comunes_demo.md",
+    "section": "Error: no aparece un pago en cartera",
+    "expected_entities": {
+      "error": "pago no aparece cartera"
+    },
+    "ground_truth": "Causas frecuentes: Pago registrado en Tesorería pero no aplicado a cartera. Consignación sin identificar. Diferencia en valor pagado. Pago aplicado a otro cliente o factura."
+  },
+  {
+    "query": "Las ventas de mi sede POS no se estan sincronizando al ERP central",
+    "intent": "soporte",
+    "file": "errores_fallas_comunes_demo.md",
+    "section": "Error: POS no sincroniza ventas",
+    "expected_entities": {
+      "error": "POS no sincroniza"
+    },
+    "ground_truth": "Causas frecuentes: Sin conexión a internet. Turno de caja no cerrado. Servicio de sincronización detenido. Credenciales del POS vencidas."
+  },
+  {
+    "query": "El sistema me rechaza mi contraseña y no puedo entrar al ERP",
+    "intent": "soporte",
+    "file": "errores_fallas_comunes_demo.md",
+    "section": "Error: usuario no puede ingresar",
+    "expected_entities": {
+      "error": "usuario no ingresa"
+    },
+    "ground_truth": "Causas frecuentes: Contraseña incorrecta. Usuario inactivo. Perfil sin permisos. Bloqueo temporal por intentos fallidos."
+  },
+  {
+    "query": "El balance contable tiene diferencias y no cuadra",
+    "intent": "soporte",
+    "file": "errores_fallas_comunes_demo.md",
+    "section": "Error: reporte contable no cuadra",
+    "expected_entities": {
+      "error": "reporte contable no cuadra"
+    },
+    "ground_truth": "Causas frecuentes: Documentos sin contabilizar. Periodo contable cerrado parcialmente. Cuentas mal parametrizadas. Terceros o centros de costo incompletos."
+  },
+  {
+    "query": "El sistema SysPlus esta demasiado lento hoy en todas las pantallas",
+    "intent": "soporte",
+    "file": "errores_fallas_comunes_demo.md",
+    "section": "Falla común: lentitud general del sistema",
+    "expected_entities": {
+      "error": "lentitud general"
+    },
+    "ground_truth": "Causas frecuentes: Filtros de fecha muy amplios. Muchos usuarios generando reportes pesados. Conexión inestable. Navegador con caché saturada."
+  },
+  {
+    "query": "¿Cuánto tiempo toma implementar el ERP completo?",
+    "intent": "comercial",
+    "file": "preventa.md",
+    "section": "Preguntas frecuentes",
+    "expected_entities": {
+      "tema": "tiempo de implementación"
+    },
+    "ground_truth": "¿Cuánto tiempo toma la implementación?"
+  },
+  {
+    "query": "Quiero saber que datos o informacion necesito darles para la implementacion",
+    "intent": "comercial",
+    "file": "implementacion.md",
+    "section": "Información requerida",
+    "expected_entities": {
+      "tema": "información requerida"
+    },
+    "ground_truth": "Empresa. Proyecto. Responsable. Módulos."
+  },
+  {
+    "query": "¿Cómo puedo renovar mi licencia anual de SysPlus?",
+    "intent": "comercial",
+    "file": "licenciamiento.md",
+    "section": "Preguntas frecuentes",
+    "expected_entities": {
+      "tema": "renovar licencia"
+    },
+    "ground_truth": "¿Cómo renovar la licencia?"
+  },
+  {
+    "query": "Quiero programar una cita para una demostración del ERP",
+    "intent": "comercial",
+    "file": "comercial.md",
+    "section": "Servicios ofrecidos",
+    "expected_entities": {
+      "accion": "agendar cita"
+    },
+    "ground_truth": "Demostraciones del ERP. Presentación de módulos."
+  },
+  {
+    "query": "¿Tienen soporte técnico incluido con la licencia o toca pagarlo aparte?",
+    "intent": "comercial",
+    "file": "sysplus_modulos.md",
+    "section": "Precios y Soporte",
+    "expected_entities": {
+      "tema": "soporte incluido"
+    },
+    "ground_truth": "Todos los valores comerciales y precios de los módulos individuales y combos son anuales e incluyen soporte técnico por un año."
+  },
+  {
+    "query": "Hola buenas tardes",
+    "intent": "otro",
+    "file": null,
+    "section": null,
+    "expected_entities": {},
+    "ground_truth": null
+  },
+  {
+    "query": "gracias por la informacion, chao",
+    "intent": "otro",
+    "file": null,
+    "section": null,
+    "expected_entities": {},
+    "ground_truth": null
+  },
+  {
+    "query": "¿De qué color es el caballo blanco de Simón Bolívar?",
+    "intent": "otro",
+    "file": null,
+    "section": null,
+    "expected_entities": {},
+    "ground_truth": null
+  }
+]
