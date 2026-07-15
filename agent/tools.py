@@ -123,6 +123,30 @@ def consultar_parametro(clave: str) -> dict:
         return {"clave": param.clave, "valor": param.valor}
 
 
+def _sync_lead_crm(telefono: str, interes: str = "") -> dict:
+    """Empuja al CRM el Lead con TODOS los datos del registro local (contacto+cliente),
+    fuente de verdad. Upsert por teléfono, así enriquece el mismo lead sin duplicar."""
+    with SyncSession() as session:
+        contacto = session.get(Contacto, telefono)
+        cliente = session.get(Cliente, telefono)
+    if not contacto:
+        return {"estado": "error", "mensaje": f"No hay contacto registrado con {telefono}."}
+    empresa = (cliente.nombre_empresa if cliente else None) or contacto.empresa or ""
+    try:
+        lead = espocrm.crear_lead(
+            nombre=contacto.nombre, telefono=telefono, empresa=empresa,
+            correo=contacto.correo or "", interes=interes, ciudad=contacto.ciudad,
+            sector=cliente.sector_empresa if cliente else None,
+            actividad=cliente.actividad_empresa if cliente else None,
+            empleados=cliente.empleados_empresa if cliente else None,
+            identificacion=cliente.numero_identificacion if cliente else None,
+            nit=cliente.nit_empresa if cliente else None,
+        )
+        return {"lead_id": lead.get("id"), "estado": "registrado"}
+    except httpx.HTTPError as e:
+        return {"estado": "error", "mensaje": f"CRM no disponible: {e}"}
+
+
 def registrar_lead_crm(
     nombre: str,
     telefono: str,
@@ -132,19 +156,17 @@ def registrar_lead_crm(
     actividad: str | None = None,
     empleados: str | None = None,
 ) -> dict:
-    try:
-        lead = espocrm.crear_lead(nombre, telefono, empresa, "", interes)
-        resultado = {"lead_id": lead.get("id"), "estado": "registrado"}
-    except httpx.HTTPError as e:
-        resultado = {"estado": "error", "mensaje": f"CRM no disponible: {e}"}
     with SyncSession() as session:
+        contacto = _upsert_contacto(session, telefono, nombre)
+        if empresa:
+            contacto.empresa = empresa
         _upsert_cliente(
             session, telefono, tipo="lead",
             nombre_empresa=empresa, sector_empresa=sector,
             actividad_empresa=actividad, empleados_empresa=empleados,
         )
         session.commit()
-    return resultado
+    return _sync_lead_crm(telefono, interes)
 
 
 def consultar_estado_cliente(telefono: str) -> dict:
@@ -599,7 +621,9 @@ def registrar_cliente(
         if isinstance(cliente, dict):
             return cliente
         session.commit()
-        return {"telefono": telefono, "estado": "cliente_registrado"}
+    # GAP 3: cédula/NIT/perfil también deben viajar al CRM, no solo a la BD local.
+    _sync_lead_crm(telefono)
+    return {"telefono": telefono, "estado": "cliente_registrado"}
 
 
 def finalizar_conversacion(telefono: str, motivo_cierre: str = "usuario") -> dict:
