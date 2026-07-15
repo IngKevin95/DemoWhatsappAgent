@@ -11,15 +11,13 @@ SessionLocal = async_sessionmaker(engine, class_=AsyncSession, expire_on_commit=
 
 class Mensaje(Base):
     """Log inmutable de chat (sin Auditoria — timestamp ya cumple ese rol, nunca se actualiza).
-    area_id: área a la que pertenecía el contacto al momento del mensaje (NULL si aún
-    no escalado). Útil para reportes por área sin depender del estado actual del contacto."""
+    El área del caso vive en radicados.area_id, no aquí."""
     __tablename__ = "mensajes"
     id = Column(Integer, primary_key=True)
     telefono = Column(String, ForeignKey("contactos.telefono"), index=True)
     conversacion_id = Column(Integer, ForeignKey("conversaciones.id"), nullable=True)
     role = Column(String)
     content = Column(String)
-    area_id = Column(Integer, ForeignKey("areas.id"), nullable=True)
     timestamp = Column(DateTime, default=datetime.utcnow)
 
 
@@ -28,9 +26,9 @@ async def inicializar_db():
         await conn.run_sync(Base.metadata.create_all)
 
 
-async def guardar_mensaje(telefono: str, role: str, content: str, area_id: int | None = None, conversacion_id: int | None = None):
+async def guardar_mensaje(telefono: str, role: str, content: str, conversacion_id: int | None = None):
     async with SessionLocal() as session:
-        session.add(Mensaje(telefono=telefono, role=role, content=content, area_id=area_id, conversacion_id=conversacion_id))
+        session.add(Mensaje(telefono=telefono, role=role, content=content, conversacion_id=conversacion_id))
         await session.commit()
 
 
