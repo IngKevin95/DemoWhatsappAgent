@@ -129,8 +129,8 @@ CREATE TABLE public.clientes (
 CREATE TABLE public.radicados (
     id           integer NOT NULL,
     telefono     character varying NOT NULL,
-    area_id      integer,
-    resumen      character varying,
+    area_id      integer NOT NULL,
+    resumen      character varying NOT NULL,
     estado       character varying NOT NULL DEFAULT 'abierto',
     modo         character varying,                          -- conectado | notificacion_con_contacto | notificacion
     agente_id    integer,
