@@ -8,6 +8,7 @@ from agent.tools import (
     agendar_cita,
     reclasificar_caso_sin_licencia,
     escalar_a_humano,
+    consultar_combos,
 )
 
 
@@ -190,3 +191,27 @@ class TestEscalarAHumano:
             # Should handle gracefully - returns dict with mensaje de sin agentes
             assert resultado is not None
             assert isinstance(resultado, dict)
+
+
+class TestConsultarCombos:
+    """Tests for combo queries."""
+
+    def test_consultar_combos_list(self):
+        """Query combos list."""
+        mock_combo1 = MagicMock()
+        mock_combo1.nombre = "Combo Pyme"
+        mock_combo1.descripcion = "Pyme desc"
+        mock_combo1.modulos = "Facturación, POS"
+        mock_combo1.precio_anual_cop = 1500000
+
+        mock_session = MagicMock()
+        mock_session.query.return_value.all.return_value = [mock_combo1]
+        mock_session.__enter__.return_value = mock_session
+
+        with patch("agent.tools.SyncSession", return_value=mock_session):
+            resultado = consultar_combos()
+            assert isinstance(resultado, list)
+            assert len(resultado) == 1
+            assert resultado[0]["nombre"] == "Combo Pyme"
+            assert resultado[0]["periodo"] == "anual"
+            assert "soporte" in resultado[0]

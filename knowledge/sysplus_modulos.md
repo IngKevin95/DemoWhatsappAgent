@@ -38,3 +38,7 @@ Plan de cuentas configurable, causación automática desde todos los módulos, e
 
 ## POS
 Punto de venta táctil, múltiples medios de pago, turnos de caja, facturación electrónica en línea, integración con inventario en tiempo real.
+
+## Precios y Soporte
+Todos los valores comerciales y precios de los módulos individuales y combos son **anuales** e incluyen **soporte técnico por un año**. Al finalizar el año de soporte, el cliente debe renovar su contrato de soporte para continuar recibiendo atención técnica.
+
