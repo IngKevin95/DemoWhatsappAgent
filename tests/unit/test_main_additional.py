@@ -35,24 +35,65 @@ def test_segundos_desde():
     assert segundos <= 61
 
 
+def _make_async_session_mock(conv=None, msg=None, contacto=None):
+    """Helper: returns a mock async context manager for SessionLocal."""
+    mock_session = AsyncMock()
+
+    # conv result
+    conv_scalars = MagicMock()
+    conv_scalars.first.return_value = conv
+    conv_execute_result = MagicMock()
+    conv_execute_result.scalars.return_value = conv_scalars
+
+    # msg result
+    msg_scalars = MagicMock()
+    msg_scalars.first.return_value = msg
+    msg_execute_result = MagicMock()
+    msg_execute_result.scalars.return_value = msg_scalars
+
+    # cierre_msg result (select Mensaje for delete in cierre path)
+    del_scalars = MagicMock()
+    del_scalars.all.return_value = []
+    del_execute_result = MagicMock()
+    del_execute_result.scalars.return_value = del_scalars
+
+    # execute side_effect: first call = conv, second = msg, subsequent = del
+    mock_session.execute = AsyncMock(side_effect=[
+        conv_execute_result,
+        msg_execute_result,
+        del_execute_result,
+    ])
+    mock_session.get = AsyncMock(return_value=contacto)
+    mock_session.add = MagicMock()
+    mock_session.commit = AsyncMock()
+    mock_session.delete = AsyncMock()
+
+    # async context manager protocol
+    async_cm = AsyncMock()
+    async_cm.__aenter__ = AsyncMock(return_value=mock_session)
+    async_cm.__aexit__ = AsyncMock(return_value=False)
+
+    return async_cm, mock_session
+
+
 @pytest.mark.asyncio
 async def test_revisar_inactividad_sin_conversacion_activa():
-    """_revisar_inactividad should do nothing if conv_id is None (closed conversation)."""
+    """_revisar_inactividad should do nothing if no open conversation."""
     from agent.main import _revisar_inactividad
-    
+
+    async_cm, mock_session = _make_async_session_mock(conv=None)
+
     with patch("agent.main.telefonos_con_actividad_reciente", AsyncMock(return_value=["12345"])), \
-         patch("agent.main.ultimo_mensaje", AsyncMock(return_value={"role": "user", "content": "hola", "timestamp": datetime.now(timezone.utc) - timedelta(seconds=1000)})), \
-         patch("agent.main.obtener_conversacion_activa", AsyncMock(return_value=None)), \
-         patch("agent.main.guardar_mensaje", AsyncMock()) as mock_guardar, \
+         patch("agent.main.SessionLocal", return_value=async_cm), \
          patch("agent.main.enviar_mensaje_seguro", AsyncMock()) as mock_enviar, \
          patch("asyncio.sleep", AsyncMock(side_effect=[None, ValueError("stop")])):
-        
+
         try:
             await _revisar_inactividad()
         except ValueError:
             pass
-            
-        mock_guardar.assert_not_called()
+
+        mock_session.add.assert_not_called()
         mock_enviar.assert_not_called()
 
 
@@ -60,27 +101,36 @@ async def test_revisar_inactividad_sin_conversacion_activa():
 async def test_revisar_inactividad_ultimo_mensaje_usuario():
     """_revisar_inactividad sends CHECKIN_1 if last message is from user and timeout passed."""
     from agent.main import _revisar_inactividad, MENSAJE_CHECKIN_1
-    
+    from agent.memory import Mensaje
+
+    mock_conv = MagicMock()
+    mock_conv.id = 42
+
+    mock_msg = MagicMock(spec=Mensaje)
+    mock_msg.role = "user"
+    mock_msg.content = "hola"
+    mock_msg.timestamp = datetime.now(timezone.utc) - timedelta(seconds=1000)
+
     mock_contacto = MagicMock()
     mock_contacto.canal = "telegram"
-    
+
+    async_cm, mock_session = _make_async_session_mock(conv=mock_conv, msg=mock_msg, contacto=mock_contacto)
+
     with patch("agent.main.telefonos_con_actividad_reciente", AsyncMock(return_value=["12345"])), \
-         patch("agent.main.ultimo_mensaje", AsyncMock(return_value={"role": "user", "content": "hola", "timestamp": datetime.now(timezone.utc) - timedelta(seconds=1000)})), \
-         patch("agent.main.obtener_conversacion_activa", AsyncMock(return_value=42)), \
-         patch("agent.main.SyncSession") as mock_session_cls, \
-         patch("agent.main.guardar_mensaje", AsyncMock()) as mock_guardar, \
+         patch("agent.main.SessionLocal", return_value=async_cm), \
          patch("agent.main.enviar_mensaje_seguro", AsyncMock()) as mock_enviar, \
          patch("asyncio.sleep", AsyncMock(side_effect=[None, ValueError("stop")])):
-        
-        mock_session = mock_session_cls.return_value.__enter__.return_value
-        mock_session.query.return_value.filter.return_value.first.return_value = mock_contacto
-        
+
         try:
             await _revisar_inactividad()
         except ValueError:
             pass
-            
-        mock_guardar.assert_called_once_with("12345", "assistant", MENSAJE_CHECKIN_1, conversacion_id=42)
+
+        mock_session.add.assert_called_once()
+        added = mock_session.add.call_args[0][0]
+        assert added.content == MENSAJE_CHECKIN_1
+        assert added.role == "assistant"
+        mock_session.commit.assert_called_once()
         mock_enviar.assert_called_once_with("12345", MENSAJE_CHECKIN_1, canal="telegram")
 
 
@@ -88,27 +138,35 @@ async def test_revisar_inactividad_ultimo_mensaje_usuario():
 async def test_revisar_inactividad_ultimo_mensaje_asistente_normal():
     """_revisar_inactividad sends CHECKIN_1 if last message is a normal assistant response and timeout passed."""
     from agent.main import _revisar_inactividad, MENSAJE_CHECKIN_1
-    
+    from agent.memory import Mensaje
+
+    mock_conv = MagicMock()
+    mock_conv.id = 42
+
+    mock_msg = MagicMock(spec=Mensaje)
+    mock_msg.role = "assistant"
+    mock_msg.content = "Aquí tienes los precios."
+    mock_msg.timestamp = datetime.now(timezone.utc) - timedelta(seconds=1000)
+
     mock_contacto = MagicMock()
     mock_contacto.canal = "meta"
-    
+
+    async_cm, mock_session = _make_async_session_mock(conv=mock_conv, msg=mock_msg, contacto=mock_contacto)
+
     with patch("agent.main.telefonos_con_actividad_reciente", AsyncMock(return_value=["12345"])), \
-         patch("agent.main.ultimo_mensaje", AsyncMock(return_value={"role": "assistant", "content": "Aquí tienes los precios.", "timestamp": datetime.now(timezone.utc) - timedelta(seconds=1000)})), \
-         patch("agent.main.obtener_conversacion_activa", AsyncMock(return_value=42)), \
-         patch("agent.main.SyncSession") as mock_session_cls, \
-         patch("agent.main.guardar_mensaje", AsyncMock()) as mock_guardar, \
+         patch("agent.main.SessionLocal", return_value=async_cm), \
          patch("agent.main.enviar_mensaje_seguro", AsyncMock()) as mock_enviar, \
          patch("asyncio.sleep", AsyncMock(side_effect=[None, ValueError("stop")])):
-        
-        mock_session = mock_session_cls.return_value.__enter__.return_value
-        mock_session.query.return_value.filter.return_value.first.return_value = mock_contacto
-        
+
         try:
             await _revisar_inactividad()
         except ValueError:
             pass
-            
-        mock_guardar.assert_called_once_with("12345", "assistant", MENSAJE_CHECKIN_1, conversacion_id=42)
+
+        mock_session.add.assert_called_once()
+        added = mock_session.add.call_args[0][0]
+        assert added.content == MENSAJE_CHECKIN_1
+        mock_session.commit.assert_called_once()
         mock_enviar.assert_called_once_with("12345", MENSAJE_CHECKIN_1, canal="meta")
 
 
@@ -116,58 +174,74 @@ async def test_revisar_inactividad_ultimo_mensaje_asistente_normal():
 async def test_revisar_inactividad_transicion_checkin2():
     """_revisar_inactividad sends CHECKIN_2 if last message was CHECKIN_1."""
     from agent.main import _revisar_inactividad, MENSAJE_CHECKIN_1, MENSAJE_CHECKIN_2
-    
+    from agent.memory import Mensaje
+
+    mock_conv = MagicMock()
+    mock_conv.id = 42
+
+    mock_msg = MagicMock(spec=Mensaje)
+    mock_msg.role = "assistant"
+    mock_msg.content = MENSAJE_CHECKIN_1
+    mock_msg.timestamp = datetime.now(timezone.utc) - timedelta(seconds=1000)
+
     mock_contacto = MagicMock()
     mock_contacto.canal = "meta"
-    
+
+    async_cm, mock_session = _make_async_session_mock(conv=mock_conv, msg=mock_msg, contacto=mock_contacto)
+
     with patch("agent.main.telefonos_con_actividad_reciente", AsyncMock(return_value=["12345"])), \
-         patch("agent.main.ultimo_mensaje", AsyncMock(return_value={"role": "assistant", "content": MENSAJE_CHECKIN_1, "timestamp": datetime.now(timezone.utc) - timedelta(seconds=1000)})), \
-         patch("agent.main.obtener_conversacion_activa", AsyncMock(return_value=42)), \
-         patch("agent.main.SyncSession") as mock_session_cls, \
-         patch("agent.main.guardar_mensaje", AsyncMock()) as mock_guardar, \
+         patch("agent.main.SessionLocal", return_value=async_cm), \
          patch("agent.main.enviar_mensaje_seguro", AsyncMock()) as mock_enviar, \
          patch("asyncio.sleep", AsyncMock(side_effect=[None, ValueError("stop")])):
-        
-        mock_session = mock_session_cls.return_value.__enter__.return_value
-        mock_session.query.return_value.filter.return_value.first.return_value = mock_contacto
-        
+
         try:
             await _revisar_inactividad()
         except ValueError:
             pass
-            
-        mock_guardar.assert_called_once_with("12345", "assistant", MENSAJE_CHECKIN_2, conversacion_id=42)
+
+        mock_session.add.assert_called_once()
+        added = mock_session.add.call_args[0][0]
+        assert added.content == MENSAJE_CHECKIN_2
+        mock_session.commit.assert_called_once()
         mock_enviar.assert_called_once_with("12345", MENSAJE_CHECKIN_2, canal="meta")
 
 
 @pytest.mark.asyncio
 async def test_revisar_inactividad_cierre_completo():
-    """_revisar_inactividad sends CIERRE, clears history and finalizes if last message was CHECKIN_2."""
+    """_revisar_inactividad sends CIERRE, closes conversation and clears history."""
     from agent.main import _revisar_inactividad, MENSAJE_CHECKIN_2, MENSAJE_CIERRE
-    
+    from agent.memory import Mensaje
+
+    mock_conv = MagicMock()
+    mock_conv.id = 42
+    mock_conv.estado = "abierta"
+    mock_conv.espera_desde = None
+    mock_conv.espera_hasta = None
+
+    mock_msg = MagicMock(spec=Mensaje)
+    mock_msg.role = "assistant"
+    mock_msg.content = MENSAJE_CHECKIN_2
+    mock_msg.timestamp = datetime.now(timezone.utc) - timedelta(seconds=1000)
+
     mock_contacto = MagicMock()
     mock_contacto.canal = "meta"
-    
+
+    async_cm, mock_session = _make_async_session_mock(conv=mock_conv, msg=mock_msg, contacto=mock_contacto)
+
     with patch("agent.main.telefonos_con_actividad_reciente", AsyncMock(return_value=["12345"])), \
-         patch("agent.main.ultimo_mensaje", AsyncMock(return_value={"role": "assistant", "content": MENSAJE_CHECKIN_2, "timestamp": datetime.now(timezone.utc) - timedelta(seconds=1000)})), \
-         patch("agent.main.obtener_conversacion_activa", AsyncMock(return_value=42)), \
-         patch("agent.main.SyncSession") as mock_session_cls, \
-         patch("agent.main.guardar_mensaje", AsyncMock()) as mock_guardar, \
+         patch("agent.main.SessionLocal", return_value=async_cm), \
          patch("agent.main.enviar_mensaje_seguro", AsyncMock()) as mock_enviar, \
-         patch("agent.main.limpiar_historial", AsyncMock()) as mock_limpiar, \
-         patch("agent.tools.finalizar_conversacion") as mock_finalizar, \
          patch("asyncio.sleep", AsyncMock(side_effect=[None, ValueError("stop")])):
-        
-        mock_session = mock_session_cls.return_value.__enter__.return_value
-        mock_session.query.return_value.filter.return_value.first.return_value = mock_contacto
-        
+
         try:
             await _revisar_inactividad()
         except ValueError:
             pass
-            
-        mock_guardar.assert_called_once_with("12345", "assistant", MENSAJE_CIERRE, conversacion_id=42)
-        mock_enviar.assert_called_once_with("12345", MENSAJE_CIERRE, canal="meta")
-        mock_limpiar.assert_called_once_with("12345")
-        mock_finalizar.assert_called_once_with("12345", "inactividad")
 
+        mock_session.add.assert_called_once()
+        added = mock_session.add.call_args[0][0]
+        assert added.content == MENSAJE_CIERRE
+        mock_session.commit.assert_called_once()
+        assert mock_conv.estado == "cerrada"
+        assert mock_conv.motivo_cierre == "inactividad"
+        mock_enviar.assert_called_once_with("12345", MENSAJE_CIERRE, canal="meta")

@@ -19,3 +19,4 @@ pytest-asyncio
 pytest-cov
 pybreaker
 bandit
+reportlab

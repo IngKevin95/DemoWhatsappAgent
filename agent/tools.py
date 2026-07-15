@@ -61,9 +61,39 @@ def cargar_info_negocio() -> str:
 def buscar_en_knowledge(modulo: str) -> str:
     contenido = cargar_info_negocio()
     objetivo = _norm(modulo)
+
+    stop_words = {"de", "del", "el", "la", "un", "una", "y", "modulo", "manual", "documento", "ficha", "tecnica", "sobre", "para"}
+    query_words = [w for w in objetivo.split() if w not in stop_words]
+    if not query_words:
+        query_words = [objetivo]
+
+    matching_blocks = []
     for bloque in contenido.split("## "):
-        if _norm(bloque).startswith(objetivo):
-            return "## " + bloque.strip()
+        if not bloque.strip():
+            continue
+        header = bloque.split("\n")[0]
+        header_norm = _norm(header)
+
+        is_match = False
+        if objetivo in header_norm or header_norm in objetivo:
+            is_match = True
+        else:
+            header_words = set(header_norm.split())
+            if any(qw in header_words for qw in query_words):
+                is_match = True
+
+        if is_match:
+            matching_blocks.append("## " + bloque.strip())
+
+    if matching_blocks:
+        resultado = "\n\n".join(matching_blocks)
+        # Reemplazar paths relativos con la URL pública completa para que el LLM
+        # tenga el link absoluto y pueda incluirlo directamente en su respuesta.
+        public_base = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
+        if public_base and "/static/pdfs/" in resultado:
+            resultado = resultado.replace("/static/pdfs/", f"{public_base}/static/pdfs/")
+        return resultado
+
     with SyncSession() as session:
         nombres = [m.nombre for m in session.query(Modulo).all()]
     return f"No encontré información específica sobre '{modulo}'. Módulos disponibles: {', '.join(nombres)}."

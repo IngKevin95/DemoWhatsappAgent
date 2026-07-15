@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 # FIX-REPAIR-002: Circuit breaker para Gemini
 def _fallback_generar_respuesta(*args, **kwargs) -> str:
     """Fallback cuando circuit breaker abre (Gemini caído)."""
-    return "Disculpa, estoy ocupado en este momento. ¿Puedes reformular tu pregunta?"
+    return "Disculpa, no entendi tu mensaje. ¿Puedes reformular tu pregunta?"
 
 # FIX-REPAIR-004: Timeout config from .env
 GEMINI_TIMEOUT_SECONDS = float(os.getenv('GEMINI_TIMEOUT_SECONDS', '10.0'))

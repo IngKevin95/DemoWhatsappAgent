@@ -13,11 +13,12 @@ from dotenv import load_dotenv
 load_dotenv()
 
 from fastapi import FastAPI, Request
+from fastapi.staticfiles import StaticFiles
 from fastapi.responses import PlainTextResponse, JSONResponse, Response
-from sqlalchemy import text
+from sqlalchemy import select, text
 
 from .brain import generar_respuesta
-from .db import Contacto, Parametro, SyncSession
+from .db import Contacto, Conversacion, Parametro, SyncSession
 from .memory import (
     abrir_conversacion,
     guardar_mensaje,
@@ -27,6 +28,8 @@ from .memory import (
     obtener_historial,
     telefonos_con_actividad_reciente,
     ultimo_mensaje,
+    Mensaje,
+    SessionLocal,
 )
 from .providers import obtener_proveedor
 from .tools import promover_colas
@@ -195,35 +198,67 @@ async def _revisar_inactividad():
         await asyncio.sleep(60)
         try:
             for telefono in await telefonos_con_actividad_reciente():
-                m = await ultimo_mensaje(telefono)
-                if not m:
-                    continue
-                segundos = _segundos_desde(m["timestamp"])
-                
-                # Obtener la conversación activa para relacionar el mensaje
-                conv_id = await obtener_conversacion_activa(telefono)
-                if not conv_id:
-                    continue
+                async with SessionLocal() as session:
+                    # SELECT ... FOR UPDATE serializa la revisión entre workers —
+                    # solo un worker actúa por teléfono en cada ciclo.
+                    result_conv = await session.execute(
+                        select(Conversacion)
+                        .where(Conversacion.telefono == telefono, Conversacion.estado == "abierta")
+                        .order_by(Conversacion.id.desc())
+                        .limit(1)
+                        .with_for_update(skip_locked=True)
+                    )
+                    conv = result_conv.scalars().first()
+                    if not conv:
+                        continue  # otro worker ya lo está procesando o no hay conv abierta
 
-                with SyncSession() as session:
-                    contacto = session.query(Contacto).filter(Contacto.telefono == telefono).first()
+                    # Último mensaje
+                    result_msg = await session.execute(
+                        select(Mensaje)
+                        .where(Mensaje.telefono == telefono)
+                        .order_by(Mensaje.timestamp.desc())
+                        .limit(1)
+                    )
+                    m = result_msg.scalars().first()
+                    if not m:
+                        continue
+
+                    segundos = _segundos_desde(m.timestamp)
+                    contacto = await session.get(Contacto, telefono)
                     canal = contacto.canal if contacto else "meta"
-                
-                if (m["role"] == "user" or (m["role"] == "assistant" and m["content"] not in (MENSAJE_CHECKIN_1, MENSAJE_CHECKIN_2, MENSAJE_CIERRE))) and segundos > CHECKIN_INACTIVIDAD_SEGUNDOS:
-                    await guardar_mensaje(telefono, "assistant", MENSAJE_CHECKIN_1, conversacion_id=conv_id)
-                    await enviar_mensaje_seguro(telefono, MENSAJE_CHECKIN_1, canal=canal)
-                elif m["role"] == "assistant" and m["content"] == MENSAJE_CHECKIN_1 and segundos > CHECKIN_INACTIVIDAD_SEGUNDOS:
-                    await guardar_mensaje(telefono, "assistant", MENSAJE_CHECKIN_2, conversacion_id=conv_id)
-                    await enviar_mensaje_seguro(telefono, MENSAJE_CHECKIN_2, canal=canal)
-                elif m["role"] == "assistant" and m["content"] == MENSAJE_CHECKIN_2 and segundos > CIERRE_INACTIVIDAD_SEGUNDOS:
-                    await guardar_mensaje(telefono, "assistant", MENSAJE_CIERRE, conversacion_id=conv_id)
-                    await enviar_mensaje_seguro(telefono, MENSAJE_CIERRE, canal=canal)
-                    await limpiar_historial(telefono)
-                    try:
-                        from .tools import finalizar_conversacion
-                        await asyncio.to_thread(finalizar_conversacion, telefono, "inactividad")
-                    except Exception as e:
-                        logger.error("No se pudo cerrar la BD por inactividad: %s", e)
+
+                    if (m.role == "user" or (m.role == "assistant" and m.content not in (MENSAJE_CHECKIN_1, MENSAJE_CHECKIN_2, MENSAJE_CIERRE))) and segundos > CHECKIN_INACTIVIDAD_SEGUNDOS:
+                        session.add(Mensaje(telefono=telefono, role="assistant", content=MENSAJE_CHECKIN_1, conversacion_id=conv.id))
+                        await session.commit()
+                        await enviar_mensaje_seguro(telefono, MENSAJE_CHECKIN_1, canal=canal)
+
+                    elif m.role == "assistant" and m.content == MENSAJE_CHECKIN_1 and segundos > CHECKIN_INACTIVIDAD_SEGUNDOS:
+                        session.add(Mensaje(telefono=telefono, role="assistant", content=MENSAJE_CHECKIN_2, conversacion_id=conv.id))
+                        await session.commit()
+                        await enviar_mensaje_seguro(telefono, MENSAJE_CHECKIN_2, canal=canal)
+
+                    elif m.role == "assistant" and m.content == MENSAJE_CHECKIN_2 and segundos > CIERRE_INACTIVIDAD_SEGUNDOS:
+                        # 1. Guardar MENSAJE_CIERRE primero (flush separado para evitar
+                        #    que el autoflush lo incluya en el DELETE posterior).
+                        session.add(Mensaje(telefono=telefono, role="assistant", content=MENSAJE_CIERRE, conversacion_id=conv.id))
+                        await session.flush()
+
+                        # 2. Borrar todo el historial excepto el MENSAJE_CIERRE que acabamos de insertar.
+                        del_result = await session.execute(
+                            select(Mensaje)
+                            .where(Mensaje.telefono == telefono, Mensaje.content != MENSAJE_CIERRE)
+                        )
+                        for msg_to_del in del_result.scalars().all():
+                            await session.delete(msg_to_del)
+
+                        # 3. Cerrar la conversación.
+                        conv.estado = "cerrada"
+                        conv.motivo_cierre = "inactividad"
+                        if conv.espera_desde and not conv.espera_hasta:
+                            conv.espera_hasta = datetime.now(timezone.utc).replace(tzinfo=None)
+
+                        await session.commit()
+                        await enviar_mensaje_seguro(telefono, MENSAJE_CIERRE, canal=canal)
         except Exception:
             logger.exception("Fallo revisando inactividad")
 
@@ -250,6 +285,10 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(lifespan=lifespan)
+
+# Servir PDFs de fichas técnicas de módulos
+static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
 @app.get("/")
@@ -333,7 +372,7 @@ def validar_firma_meta(body: str, signature: str | None, verify_token: str) -> b
         return False
 
 
-async def procesar_mensaje_entrante(mensaje, canal="meta"):
+async def procesar_mensaje_entrante(mensaje, request: Request = None, canal="meta"):
     if mensaje is None:
         return {"status": "ignorado"}
 
@@ -440,10 +479,47 @@ async def procesar_mensaje_entrante(mensaje, canal="meta"):
         historial=historial
     )
 
+    if "/static/pdfs/" in respuesta:
+        # Usar PUBLIC_BASE_URL si está configurado (URL pública del tunnel/proxy).
+        # Fallback a request.base_url solo si no hay otra opción.
+        public_base = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
+        if not public_base and request:
+            public_base = str(request.base_url).rstrip("/")
+        if public_base:
+            respuesta = respuesta.replace(f"{public_base}/static/pdfs/", "/static/pdfs/")
+            respuesta = respuesta.replace("/static/pdfs/", f"{public_base}/static/pdfs/")
+
     await guardar_mensaje(mensaje.telefono, "user", mensaje_sanitizado, conversacion_id=conversacion_id)
     await guardar_mensaje(mensaje.telefono, "assistant", respuesta, conversacion_id=conversacion_id)
 
-    await enviar_mensaje_seguro(mensaje.telefono, respuesta, canal=canal)
+    # Si la respuesta incluye un link a PDF, extraerlo y enviarlo como documento
+    # para que WhatsApp lo muestre como archivo descargable (type: document).
+    import re as _re
+    pdf_matches = _re.findall(r'https?://[^\s\)]+\.pdf', respuesta)
+    if pdf_matches and canal == "meta":
+        # Texto de acompañamiento: la respuesta sin los links markdown
+        texto_sin_links = _re.sub(r'\[([^\]]+)\]\(https?://[^\)]+\.pdf\)', r'\1', respuesta)
+        texto_sin_links = _re.sub(r'https?://[^\s]+\.pdf', '', texto_sin_links).strip()
+
+        if texto_sin_links:
+            await enviar_mensaje_seguro(mensaje.telefono, texto_sin_links, canal=canal)
+
+        for pdf_url in pdf_matches:
+            nombre_archivo = pdf_url.split("/")[-1]
+            try:
+                prov = _obtener_proveedor_para_canal(canal)
+                await prov.enviar_mensaje(
+                    mensaje.telefono,
+                    texto="",
+                    documento={
+                        "link": pdf_url,
+                        "filename": nombre_archivo,
+                    }
+                )
+            except Exception:
+                logger.exception("Fallo enviando documento PDF %s a %s", pdf_url, mensaje.telefono)
+    else:
+        await enviar_mensaje_seguro(mensaje.telefono, respuesta, canal=canal)
     return {"status": "ok"}
 
 
@@ -467,7 +543,7 @@ async def recibir_webhook(request: Request):
     if mensaje is None:
         return {"status": "ignorado"}
     
-    return await procesar_mensaje_entrante(mensaje, canal="meta")
+    return await procesar_mensaje_entrante(mensaje, request=request, canal="meta")
 
 
 
@@ -490,7 +566,7 @@ async def recibir_webhook_telegram(request: Request):
     if mensaje is None:
         return {"status": "ignorado"}
         
-    return await procesar_mensaje_entrante(mensaje, canal="telegram")
+    return await procesar_mensaje_entrante(mensaje, request=request, canal="telegram")
 
 @app.post("/agentes/{telefono_cliente}/liberar")
 async def liberar_agente(telefono_cliente: str):

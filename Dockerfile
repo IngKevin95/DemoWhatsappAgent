@@ -17,7 +17,9 @@ RUN pip install --no-cache-dir -r requirements.txt
 # App code + runtime data (config for prompts.yaml, scripts for the seed service)
 COPY agent/ ./agent/
 COPY config/ ./config/
+COPY knowledge/ ./knowledge/
 COPY scripts/ ./scripts/
+COPY static/ ./static/
 COPY gunicorn_conf.py .
 
 ENV PYTHONUNBUFFERED=1 \

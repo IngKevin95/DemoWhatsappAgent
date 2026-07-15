@@ -1,62 +1,75 @@
 # Manuales rápidos SysPlus ERP
 
-## Manual: facturación electrónica
-Objetivo: emitir facturas electrónicas válidas ante la DIAN desde SysPlus.
+## Facturación electrónica - Manual rápido de operación
 
-Pasos demo:
-1. Verifica que el cliente tenga NIT, razón social, correo y responsabilidad fiscal.
-2. Ingresa a Facturación > Nueva factura.
-3. Agrega productos, cantidades, impuestos y forma de pago.
-4. Revisa totales, retenciones y datos del adquiriente.
-5. Haz clic en Emitir factura electrónica.
-6. Confirma que el estado quede como Aceptada por DIAN.
+**Objetivo:** Emitir facturas electrónicas válidas ante la DIAN desde SysPlus.
 
-Recomendación: si la factura queda en estado pendiente, revisar conexión, resolución DIAN y certificado digital.
+### Pasos de la Demo:
+1. Validar que el cliente tenga NIT, razón social, correo de facturación y responsabilidad fiscal parametrizados.
+2. Ingresar a Facturación > Nueva factura.
+3. Agregar productos, cantidades, impuestos y medios de pago.
+4. Validar retenciones e impuestos.
+5. Hacer clic en "Emitir factura electrónica".
+6. Confirmar que el estado cambie a "Aceptada por DIAN".
 
-## Manual: inventario y bodegas
-Objetivo: controlar existencias por bodega, lote o serie.
+*Recomendación:* Si la factura queda pendiente, verificar la conexión, certificado digital y vigencia de la resolución de facturación de la DIAN.
 
-Pasos demo:
-1. Crea o selecciona la bodega.
-2. Registra entradas por compra, traslado o ajuste.
-3. Valida cantidades disponibles antes de facturar.
-4. Usa inventario cíclico para comparar físico contra sistema.
-5. Revisa alertas de stock mínimo y máximo.
+---
 
-Recomendación: no hacer ajustes manuales sin observación; siempre dejar trazabilidad.
+## Inventario y bodegas - Manual rápido de operación
 
-## Manual: cartera y cobranza
-Objetivo: consultar saldos vencidos y registrar gestión de cobro.
+**Objetivo:** Controlar existencias por bodega, lote o serie.
 
-Pasos demo:
-1. Ingresa a Cartera > Edades de cartera.
-2. Filtra por cliente, vendedor o rango de vencimiento.
-3. Revisa facturas vencidas y acuerdos de pago.
-4. Registra observación de llamada, correo o compromiso.
-5. Programa recordatorio automático si aplica.
+### Pasos de la Demo:
+1. Crear o seleccionar la bodega correspondiente.
+2. Registrar entradas de inventario mediante compras, traslados o ajustes.
+3. Verificar cantidades disponibles antes de generar ventas.
+4. Ejecutar conteos cíclicos periódicos para conciliar físico contra sistema.
+5. Revisar las alertas de stock mínimo y máximo.
 
-Recomendación: validar pagos en Tesorería antes de escalar un cobro.
+*Recomendación:* Todo ajuste de inventario manual debe incluir una justificación escrita para mantener la trazabilidad.
 
-## Manual: POS
-Objetivo: vender desde punto de venta con inventario en tiempo real.
+---
 
-Pasos demo:
-1. Abre turno de caja.
-2. Escanea productos o búscalos por nombre.
-3. Selecciona medio de pago.
-4. Emite factura o documento equivalente.
-5. Cierra turno y compara ventas contra caja física.
+## Cartera y cobranza - Manual rápido de operación
 
-Recomendación: si el POS trabaja offline, sincronizar antes del cierre diario.
+**Objetivo:** Consultar saldos vencidos y registrar gestiones de cobro.
 
-## Manual: CRM comercial
-Objetivo: registrar oportunidades y hacer seguimiento de prospectos.
+### Pasos de la Demo:
+1. Ingresar a Cartera > Edades de cartera.
+2. Filtrar por cliente, vendedor o días de vencimiento.
+3. Analizar facturas pendientes e identificar acuerdos de pago vigentes.
+4. Registrar observaciones de la gestión (llamadas, correos, compromisos).
+5. Programar recordatorios automáticos de cobro.
 
-Pasos demo:
-1. Crea el lead con nombre, empresa, teléfono e interés.
-2. Asigna etapa del pipeline.
-3. Agenda próxima actividad.
-4. Registra cada interacción.
-5. Convierte el lead a cliente cuando acepte la propuesta.
+*Recomendación:* Validar siempre los extractos de tesorería para descartar pagos sin aplicar antes de iniciar el cobro.
 
-Recomendación: pedir módulo de interés y tamaño de empresa antes de agendar demo.
+---
+
+## POS Punto de venta - Manual rápido de operación
+
+**Objetivo:** Facturar en puntos de venta táctiles con inventario en tiempo real.
+
+### Pasos de la Demo:
+1. Realizar apertura de turno y registrar base de caja.
+2. Escanear productos con lector de barras o buscar por descripción.
+3. Seleccionar medios de pago del cliente.
+4. Emitir ticket de venta o factura electrónica simplificada.
+5. Realizar el arqueo y cierre de caja al finalizar el turno, comparando ventas contra dinero físico.
+
+*Recomendación:* Si el POS trabaja offline, sincronizar los datos acumulados antes del cierre de caja diario.
+
+---
+
+## CRM comercial - Manual rápido de operación
+
+**Objetivo:** Registrar leads y realizar seguimiento comercial.
+
+### Pasos de la Demo:
+1. Registrar el lead con datos de contacto, empresa e interés comercial.
+2. Asignar la etapa correspondiente en el embudo (pipeline).
+3. Agendar la próxima actividad comercial de seguimiento.
+4. Documentar cada llamada, correo o reunión sostenida.
+5. Convertir a cliente una vez aprobada la propuesta comercial.
+
+*Recomendación:* Levantar la información de módulos de interés y cantidad de usuarios antes de agendar demostraciones.
