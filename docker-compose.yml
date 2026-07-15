@@ -25,6 +25,8 @@ services:
       - "8080:8080"
     environment:
       NC_DB: "pg://postgres:5432?u=sysbot&p=sysbot&d=nocodb"
+      NC_ADMIN_EMAIL: "admin@sysplus.com"
+      NC_ADMIN_PASSWORD: "sysbotpassword123"
     volumes:
       - ncdata:/usr/app/data
 
