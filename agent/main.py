@@ -350,8 +350,9 @@ async def procesar_mensaje_entrante(mensaje, canal="meta"):
                 session.commit()
             try:
                 import asyncio
-                from .integrations.espocrm import crear_lead
-                await asyncio.to_thread(crear_lead, "Usuario WhatsApp", mensaje.telefono, "", "", "Lead Habeas Data")
+                from .tools import _sync_lead_crm
+                # usa el nombre real del contacto (no un genérico que colisiona en el CRM)
+                await asyncio.to_thread(_sync_lead_crm, mensaje.telefono, "Lead Habeas Data")
             except Exception as e:
                 logger.error("No se pudo crear lead automático: %s", e)
             await enviar_mensaje_seguro(mensaje.telefono, "Gracias. Hemos registrado tu consentimiento. ¿En qué te puedo ayudar?", canal=canal)

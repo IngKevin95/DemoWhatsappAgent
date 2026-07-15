@@ -79,6 +79,13 @@ def crear_lead(
         r = httpx.put(f"{BASE_URL}/api/v1/Lead/{existente['id']}", json=body, headers=_headers(), timeout=TIMEOUT)
     else:
         r = httpx.post(f"{BASE_URL}/api/v1/Lead", json=body, headers=_headers(), timeout=TIMEOUT)
+        # 409 = EspoCRM detectó duplicado por nombre/email (no por teléfono). Recuperar
+        # el existente por teléfono y actualizarlo; si no hay match, devolverlo tal cual.
+        if r.status_code == 409:
+            prev = consultar_lead(telefono)
+            if not prev:
+                return {}
+            r = httpx.put(f"{BASE_URL}/api/v1/Lead/{prev['id']}", json=body, headers=_headers(), timeout=TIMEOUT)
     r.raise_for_status()
     return r.json()
 
