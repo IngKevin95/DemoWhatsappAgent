@@ -19,8 +19,8 @@ documento resume qué hay y qué falta, sin duplicar ese contenido.
 - **Modelo de datos orientado a Radicados ya construido** (`agent/db.py`):
   `Area`, `Agente`, `Contacto`, `Cliente` (con tipo lead/cliente y perfil de
   empresa), `Radicado` (agregado raíz — caso de atención, con `estado`,
-  `modo`, `crm_case_id`), `ColaEspera`, además de `Modulo`/`Oferta`/
-  `Parametro`/`Mensaje`. `escalar_a_humano()` (`agent/tools.py`) ya persiste
+  `modo`, `crm_case_id`), además de `Modulo`/`Oferta`/
+  `Parametro`/`Mensaje` y `Conversacion` (que incluye métricas de espera en cola). `escalar_a_humano()` (`agent/tools.py`) ya persiste
   un `Radicado` real en vez de un ID en memoria. Cubre el diagrama de
   dominio transversal del [`00-Vision-Roadmap.md`](../00-Vision-Roadmap.md#4-concepto-de-dominio-transversal-a-todas-las-fases)
   a nivel de esquema — falta madurar Conversación/Evento/Tool Call/Agent

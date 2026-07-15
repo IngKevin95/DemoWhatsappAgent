@@ -15,6 +15,8 @@
   descripcion: Pregunta general sobre qué hace la empresa (usa knowledge base).
   turnos:
     - usuario: "¿Qué es SysPlus y qué módulos manejan?"
+      espera_keywords: ["nombre|empresa|correo|ciudad|contacto"]
+    - usuario: "Me llamo Carlos Perez, de Comercializadora Sol, mi correo es carlos@sol.com y soy de Cali."
       espera_keywords: ["módulo|modulo"]
 
 - id: 03_precio_modulo_existente
@@ -22,13 +24,17 @@
   descripcion: Consulta de precio de un módulo real (ajustar nombre según config/knowledge).
   turnos:
     - usuario: "¿Cuánto cuesta el módulo de nómina?"
-      espera_keywords: ["\\$|cop|precio"]
+      espera_keywords: ["nombre|empresa|correo|ciudad|contacto"]
+    - usuario: "Soy Carlos Perez, de Comercializadora Sol, mi correo es carlos@sol.com y soy de Cali."
+      espera_keywords: ["\\$|cop|precio|anual|soporte"]
 
 - id: 04_precio_modulo_inexistente
   categoria: informacion
   descripcion: Módulo que no existe; el bot no debe inventar precio.
   turnos:
     - usuario: "¿Cuánto cuesta el módulo de teletransporte cuántico?"
+      espera_keywords: ["nombre|empresa|correo|ciudad|contacto"]
+    - usuario: "Soy Carlos Perez, de Comercializadora Sol, mi correo es carlos@sol.com y soy de Cali."
       espera_keywords: ["no encontr|no tenemos|no contamos|no existe"]
 
 - id: 05_ofertas_activas
@@ -36,18 +42,22 @@
   descripcion: Preguntar por descuentos/ofertas vigentes.
   turnos:
     - usuario: "¿Tienen alguna oferta o descuento activo ahorita?"
+      espera_keywords: ["nombre|empresa|correo|ciudad|contacto"]
+    - usuario: "Soy Carlos Perez, de Comercializadora Sol, mi correo es carlos@sol.com y soy de Cali."
 
 - id: 06_horario_atencion
   categoria: informacion
   descripcion: Pregunta por parámetro de negocio (horario de atención).
   turnos:
     - usuario: "¿Cuál es su horario de atención?"
+      espera_keywords: ["nombre|empresa|correo|ciudad|contacto"]
+    - usuario: "Soy Carlos Ruiz, de Andina, carlos@andina.com, Medellín."
 
 - id: 07_datos_contacto
   categoria: crm
   descripcion: Usuario da su nombre y empresa; debe quedar guardado en Contacto.
   turnos:
-    - usuario: "Me llamo Laura Gómez, trabajo en Ferretería El Tornillo, quiero info de sus productos."
+    - usuario: "Me llamo Laura Gómez, trabajo en Ferretería El Tornillo, mi correo es laura@tornillo.com y vivo en Bogotá, quiero info de sus productos."
   side_effects:
     - tipo: contacto_existe
       nombre_contiene: "Laura"
@@ -56,7 +66,7 @@
   categoria: crm
   descripcion: Usuario interesado deja datos completos; debe crearse un lead en el CRM.
   turnos:
-    - usuario: "Hola, soy Carlos Ruiz de Distribuidora Andina, mi correo es carlos@andina.com, me interesa el módulo de inventario, ¿me pueden contactar?"
+    - usuario: "Hola, soy Carlos Ruiz de Distribuidora Andina, mi correo es carlos@andina.com y vivo en Barranquilla, me interesa el módulo de inventario, ¿me pueden contactar?"
   side_effects:
     - tipo: lead_existe
       interes_contiene: "inventario"
@@ -66,18 +76,22 @@
   descripcion: Consultar estado propio sin tener registro previo.
   turnos:
     - usuario: "¿Ya tienen mi información registrada? Quiero saber el estado de mi solicitud."
+      espera_keywords: ["nombre|empresa|correo|ciudad|contacto"]
+    - usuario: "Soy Carlos Ruiz, de Andina, carlos@andina.com, Medellín."
 
 - id: 10_disponibilidad_agenda
   categoria: agenda
   descripcion: Preguntar horarios disponibles del área comercial.
   turnos:
     - usuario: "¿Qué horarios tienen disponibles esta semana para una reunión con el área comercial?"
+      espera_keywords: ["nombre|empresa|correo|ciudad|contacto"]
+    - usuario: "Soy Carlos Ruiz, de Andina, carlos@andina.com, Medellín."
 
 - id: 11_agendar_cita_exitosa
   categoria: agenda
   descripcion: Flujo completo de agendamiento con datos suficientes.
   turnos:
-    - usuario: "Soy Ana Torres, teléfono 573001234567, quiero agendar una cita con el área comercial para hablar del módulo de nómina."
+    - usuario: "Soy Ana Torres, trabajo en Calzado Torres, mi correo es ana@torres.com, vivo en Pasto, mi teléfono es 573001234567 y quiero agendar una cita con el área comercial para hablar del módulo de nómina."
     - usuario: "Para mañana a las 10:30, el motivo es conocer el producto."
   side_effects:
     - tipo: cita_o_alternativa
@@ -92,16 +106,16 @@
     real (sin depender de memoria de conversación), debe chocar de verdad y
     ofrecer alternativas.
   setup_previo:
-    - usuario: "Soy Ana Setup, cel 573009999999, quiero agendar una cita de soporte para hoy a las 09:00, el motivo es revisar un error del módulo de nómina."
+    - usuario: "Soy Ana Setup, cel 573009999999, trabajo en Calzado Setup, correo ana@setup.com, ciudad Tunja, quiero agendar una cita de soporte para hoy a las 09:00, el motivo es revisar un error del módulo de nómina."
   turnos:
-    - usuario: "Quiero una cita de soporte para hoy a las 09:00, soy Pedro León, cel 573007654321."
+    - usuario: "Quiero una cita de soporte para hoy a las 09:00, soy Pedro León, cel 573007654321, trabajo en Calzado Pedro, correo pedro@calzado.com, ciudad Neiva."
       espera_keywords: ["disponib|alternativa|libre|otro horario"]
 
 - id: 13_crear_ticket_soporte
   categoria: soporte
-  descripcion: Reportar un problema técnico concreto con cédula con soporte activo; debe generar ticket.
+  descripcion: Reportar un problem técnico concreto con cédula con soporte activo; debe generar ticket.
   turnos:
-    - usuario: "Tengo un problema, el módulo de facturación no me deja generar facturas electrónicas desde ayer, mi cédula es 900111222."
+    - usuario: "Soy Carlos Perez, de Almacenes Perez, correo carlos@perez.com, ciudad Cucuta. Tengo un problema, el módulo de facturación no me deja generar facturas electrónicas desde ayer, mi cédula es 900111222."
   side_effects:
     - tipo: ticket_creado
       modulo_contiene: "facturaci"
@@ -110,7 +124,7 @@
   categoria: soporte
   descripcion: Crea un ticket (cédula con soporte activo) y luego pregunta por su estado.
   turnos:
-    - usuario: "Se me cayó el módulo de nómina, no carga la planilla, repórtenlo por favor, mi cédula es 900111222."
+    - usuario: "Soy Carlos Perez, de Almacenes Perez, correo carlos@perez.com, ciudad Cucuta. Se me cayó el módulo de nómina, no carga la planilla, repórtenlo por favor, mi cédula es 900111222."
     - usuario: "¿Cuál es el estado de mi ticket?"
 
 - id: 13b_soporte_sin_licencia
@@ -119,7 +133,7 @@
     Identificación sin ninguna licencia (900555666): el bot no debe crear
     ticket, debe redirigir a comercial.
   turnos:
-    - usuario: "Tengo un problema con el módulo de inventario, no guarda los cambios, mi cédula es 900555666."
+    - usuario: "Soy Carlos Perez, de Almacenes Perez, correo carlos@perez.com, ciudad Cucuta. Tengo un problema con el módulo de inventario, no guarda los cambios, mi cédula es 900555666."
       espera_keywords: ["comercial|no (contamos|tenemos)|licencia|adquir"]
   side_effects: []
 
@@ -129,7 +143,7 @@
     Identificación con licencia pero sin contrato de soporte activo
     (900333444): el bot debe ofrecer contratar soporte, no crear ticket.
   turnos:
-    - usuario: "El módulo de nómina me está fallando, mi cédula es 900333444."
+    - usuario: "Soy Carlos Perez, de Almacenes Perez, correo carlos@perez.com, ciudad Cucuta. El módulo de nómina me está fallando, mi cédula es 900333444."
       espera_keywords: ["contrat|soporte activo|no (cuenta|cuentas|tiene)"]
   side_effects: []
 
@@ -139,7 +153,7 @@
     Identificación con licencia y soporte activo (900111222): debe proceder
     normal y crear ticket.
   turnos:
-    - usuario: "El módulo de inventario no sincroniza los productos, mi cédula es 900111222."
+    - usuario: "Soy Carlos Perez, de Almacenes Perez, correo carlos@perez.com, ciudad Cucuta. El módulo de inventario no sincroniza los productos, mi cédula es 900111222."
   side_effects:
     - tipo: ticket_creado
       modulo_contiene: "inventario"
@@ -148,14 +162,14 @@
   categoria: soporte
   descripcion: Preguntar por un ticket con ID inventado.
   turnos:
-    - usuario: "¿Cómo va el ticket TCK-0000?"
+    - usuario: "Soy Carlos Perez, de Almacenes Perez, correo carlos@perez.com, ciudad Cucuta. ¿Cómo va el ticket TCK-0000?"
       espera_keywords: ["no (he |pude |pudimos )?(podido )?encontr|no existe|no tenemos registro"]
 
 - id: 16_escalar_a_humano
   categoria: escalamiento
   descripcion: Usuario pide explícitamente hablar con una persona real.
   turnos:
-    - usuario: "Soy Marta Díaz, 573009998877, necesito hablar YA con una persona de soporte, esto es urgente."
+    - usuario: "Soy Marta Díaz, trabajo en Textiles Marta, correo marta@textiles.com, ciudad Ibague, cel 573009998877, necesito hablar YA con una persona de soporte, esto es urgente."
       espera_keywords: ["asesor|humano|caso|te (va a )?atender|en breve|momento"]
   side_effects:
     - tipo: escalamiento_registrado
@@ -164,8 +178,8 @@
   categoria: crm
   descripcion: Usuario ya conocido se confirma como cliente con número de identificación.
   turnos:
-    - usuario: "Me llamo Jorge Peña, mi cédula es 1020304050, ya somos clientes de ustedes."
-    - usuario: "Mi cédula es 1020304050, confírmenme como cliente por favor."
+    - usuario: "Me llamo Jorge Peña, trabajo en Almacen Jorge, correo jorge@almacen.com, ciudad Pereira, mi cédula es 1020304050, ya somos clientes de ustedes."
+    - usuario: "Confírmenme como cliente por favor."
   side_effects:
     - tipo: contacto_existe
       nombre_contiene: "Jorge"
@@ -174,9 +188,9 @@
   categoria: complejo
   descripcion: Lead nuevo que da datos, pregunta precio, y termina agendando cita comercial.
   turnos:
-    - usuario: "Hola, soy Sofía Ramírez de Textiles del Valle, sofia@textilesdelvalle.com, 573011112233."
+    - usuario: "Hola, soy Sofía Ramírez de Textiles del Valle, sofia@textilesdelvalle.com, ciudad Cali, cel 573011112233."
     - usuario: "Me interesa el módulo de inventario, ¿cuánto cuesta?"
-      espera_keywords: ["\\$|cop|precio"]
+      espera_keywords: ["\\$|cop|precio|anual|soporte"]
     - usuario: "Perfecto, quiero agendar una cita con comercial para mañana a las 14:00 para verlo con detalle."
   side_effects:
     - tipo: lead_o_contacto
@@ -212,7 +226,7 @@
   categoria: complejo
   descripcion: Ticket de soporte que no se resuelve y termina en escalamiento a humano.
   turnos:
-    - usuario: "El módulo de contabilidad me está duplicando los asientos contables, es grave, mi cédula es 900111222."
+    - usuario: "Soy Carlos Perez, de Almacenes Perez, correo carlos@perez.com, ciudad Cucuta. El módulo de contabilidad me está duplicando los asientos contables, es grave, mi cédula es 900111222."
     - usuario: "Ya intenté reiniciar sesión y sigue igual, necesito que alguien me llame ya."
       espera_keywords: ["asesor|humano|caso|te (va a )?atender|en breve|momento"]
   side_effects:
@@ -225,13 +239,18 @@
   descripcion: Mensaje con errores ortográficos y jerga; el bot debe entender la intención.
   turnos:
     - usuario: "oe q tal, kanto kuesta el modulo d nomina porfa"
-      espera_keywords: ["\\$|cop|precio"]
+      espera_keywords: ["nombre|empresa|correo|ciudad|contacto"]
+    - usuario: "soy carlos ruiz, de andina erp, carlos@andina.com, medellin"
+      espera_keywords: ["\\$|cop|precio|anual|soporte"]
 
 - id: 25_cambio_de_tema_abrupto
   categoria: robustez
   descripcion: Usuario cambia de tema varias veces en la misma conversación.
   turnos:
     - usuario: "¿Cuánto cuesta el módulo de inventario?"
+      espera_keywords: ["nombre|empresa|correo|ciudad|contacto"]
+    - usuario: "soy carlos ruiz, de andina erp, carlos@andina.com, medellin"
+      espera_keywords: ["\\$|cop|precio|anual|soporte"]
     - usuario: "Olvida eso, mejor dime el horario de atención."
     - usuario: "En realidad quiero reportar una falla en facturación, mi cédula es 900111222."
   side_effects:

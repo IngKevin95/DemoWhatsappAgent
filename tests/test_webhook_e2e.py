@@ -36,7 +36,7 @@ load_dotenv()
 
 from agent import tools  # noqa: E402
 from agent.integrations import espocrm  # noqa: E402
-from agent.db import Cliente, ColaEspera, Contacto, SyncSession  # noqa: E402
+from agent.db import Cliente, Contacto, SyncSession  # noqa: E402
 from agent.memory import limpiar_historial, obtener_historial  # noqa: E402
 
 CASOS_PATH = Path(__file__).parent / "casos_prueba.yaml"
@@ -157,7 +157,7 @@ async def correr_caso(client: httpx.AsyncClient, base_url: str, caso: dict, tele
     errores = []
 
     with SyncSession() as session:
-        for modelo in (Cliente, ColaEspera, Contacto):
+        for modelo in (Cliente, Contacto):
             obj = session.get(modelo, telefono)
             if obj:
                 session.delete(obj)
@@ -170,7 +170,7 @@ async def correr_caso(client: httpx.AsyncClient, base_url: str, caso: dict, tele
     for previo in caso.get("setup_previo", []):
         tel_previo = "57" + str(abs(hash(caso["id"] + "setup")) % 900_000_000 + 100_000_000)
         with SyncSession() as session:
-            for modelo in (Cliente, ColaEspera, Contacto):
+            for modelo in (Cliente, Contacto):
                 obj = session.get(modelo, tel_previo)
                 if obj:
                     session.delete(obj)

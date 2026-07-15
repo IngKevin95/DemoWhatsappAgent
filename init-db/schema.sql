@@ -155,6 +155,9 @@ CREATE TABLE public.conversaciones (
     estado          character varying NOT NULL DEFAULT 'abierta',
     tipo_solicitud  character varying,
     motivo_cierre   character varying,
+    espera_desde    timestamp without time zone,
+    espera_hasta    timestamp without time zone,
+    duracion_espera_seg integer GENERATED ALWAYS AS ((EXTRACT(epoch FROM (espera_hasta - espera_desde)))::integer) STORED,
     creado_en       timestamp without time zone DEFAULT now(),
     actualizado_en  timestamp without time zone DEFAULT now()
 );
@@ -201,6 +204,25 @@ ALTER TABLE ONLY public.ofertas ALTER COLUMN id SET DEFAULT nextval('public.ofer
 
 
 -- ---------------------------------------------------------------------------
+-- combos
+-- ---------------------------------------------------------------------------
+CREATE TABLE public.combos (
+    id               integer NOT NULL,
+    nombre           character varying NOT NULL,
+    descripcion      character varying,
+    modulos          character varying NOT NULL,
+    precio_anual_cop integer NOT NULL,
+    creado_en        timestamp without time zone DEFAULT now(),
+    actualizado_en   timestamp without time zone DEFAULT now()
+);
+
+CREATE SEQUENCE public.combos_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
+ALTER SEQUENCE public.combos_id_seq OWNED BY public.combos.id;
+ALTER TABLE ONLY public.combos ALTER COLUMN id SET DEFAULT nextval('public.combos_id_seq'::regclass);
+
+
+
+-- ---------------------------------------------------------------------------
 -- parametros
 -- ---------------------------------------------------------------------------
 CREATE TABLE public.parametros (
@@ -212,19 +234,7 @@ CREATE TABLE public.parametros (
 );
 
 
--- ---------------------------------------------------------------------------
--- cola_espera
--- ---------------------------------------------------------------------------
-CREATE TABLE public.cola_espera (
-    telefono       character varying NOT NULL,
-    area_id        integer NOT NULL,
-    agente_id      integer,
-    desde          timestamp without time zone DEFAULT now(),
-    hasta          timestamp without time zone,
-    duracion_seg   integer GENERATED ALWAYS AS ((EXTRACT(epoch FROM (hasta - desde)))::integer) STORED,
-    creado_en      timestamp without time zone DEFAULT now(),
-    actualizado_en timestamp without time zone DEFAULT now()
-);
+
 
 
 -- =============================================================================
@@ -235,10 +245,11 @@ ALTER TABLE ONLY public.agentes        ADD CONSTRAINT agentes_pkey        PRIMAR
 ALTER TABLE ONLY public.areas          ADD CONSTRAINT areas_pkey           PRIMARY KEY (id);
 ALTER TABLE ONLY public.areas          ADD CONSTRAINT areas_nombre_key     UNIQUE (nombre);
 ALTER TABLE ONLY public.clientes       ADD CONSTRAINT clientes_pkey        PRIMARY KEY (telefono);
-ALTER TABLE ONLY public.cola_espera    ADD CONSTRAINT cola_espera_pkey     PRIMARY KEY (telefono);
 ALTER TABLE ONLY public.contactos      ADD CONSTRAINT contactos_pkey       PRIMARY KEY (telefono);
 ALTER TABLE ONLY public.conversaciones ADD CONSTRAINT conversaciones_pkey  PRIMARY KEY (id);
 ALTER TABLE ONLY public.mensajes       ADD CONSTRAINT mensajes_pkey        PRIMARY KEY (id);
+ALTER TABLE ONLY public.combos         ADD CONSTRAINT combos_pkey         PRIMARY KEY (id);
+ALTER TABLE ONLY public.combos         ADD CONSTRAINT combos_nombre_key   UNIQUE (nombre);
 ALTER TABLE ONLY public.modulos        ADD CONSTRAINT modulos_pkey         PRIMARY KEY (id);
 ALTER TABLE ONLY public.modulos        ADD CONSTRAINT modulos_nombre_key   UNIQUE (nombre);
 ALTER TABLE ONLY public.ofertas        ADD CONSTRAINT ofertas_pkey         PRIMARY KEY (id);
@@ -251,10 +262,10 @@ ALTER TABLE ONLY public.radicados      ADD CONSTRAINT radicados_pkey       PRIMA
 -- =============================================================================
 
 CREATE INDEX ix_agentes_area_id              ON public.agentes        USING btree (area_id);
-CREATE INDEX ix_cola_espera_area_id_hasta    ON public.cola_espera    USING btree (area_id, hasta);
 CREATE INDEX ix_contactos_atendido_por       ON public.contactos      USING btree (atendido_por) WHERE (atendido_por IS NOT NULL);
 CREATE INDEX ix_conversaciones_telefono      ON public.conversaciones USING btree (telefono);
 CREATE INDEX ix_conversaciones_estado        ON public.conversaciones USING btree (estado);
+CREATE INDEX ix_conversaciones_espera        ON public.conversaciones USING btree (espera_desde, espera_hasta);
 CREATE INDEX ix_mensajes_telefono            ON public.mensajes       USING btree (telefono);
 CREATE INDEX ix_mensajes_conversacion_id     ON public.mensajes       USING btree (conversacion_id) WHERE (conversacion_id IS NOT NULL);
 CREATE INDEX ix_ofertas_modulo_id            ON public.ofertas        USING btree (modulo_id);
@@ -269,10 +280,10 @@ CREATE INDEX ix_radicados_estado             ON public.radicados      USING btre
 CREATE TRIGGER set_actualizado_en BEFORE UPDATE ON public.agentes        FOR EACH ROW EXECUTE FUNCTION public.trg_set_actualizado_en();
 CREATE TRIGGER set_actualizado_en BEFORE UPDATE ON public.areas          FOR EACH ROW EXECUTE FUNCTION public.trg_set_actualizado_en();
 CREATE TRIGGER set_actualizado_en BEFORE UPDATE ON public.clientes       FOR EACH ROW EXECUTE FUNCTION public.trg_set_actualizado_en();
-CREATE TRIGGER set_actualizado_en BEFORE UPDATE ON public.cola_espera    FOR EACH ROW EXECUTE FUNCTION public.trg_set_actualizado_en();
 CREATE TRIGGER set_actualizado_en BEFORE UPDATE ON public.contactos      FOR EACH ROW EXECUTE FUNCTION public.trg_set_actualizado_en();
 CREATE TRIGGER set_actualizado_en BEFORE UPDATE ON public.conversaciones FOR EACH ROW EXECUTE FUNCTION public.trg_set_actualizado_en();
 CREATE TRIGGER set_actualizado_en BEFORE UPDATE ON public.mensajes       FOR EACH ROW EXECUTE FUNCTION public.trg_set_actualizado_en();
+CREATE TRIGGER set_actualizado_en BEFORE UPDATE ON public.combos         FOR EACH ROW EXECUTE FUNCTION public.trg_set_actualizado_en();
 CREATE TRIGGER set_actualizado_en BEFORE UPDATE ON public.modulos        FOR EACH ROW EXECUTE FUNCTION public.trg_set_actualizado_en();
 CREATE TRIGGER set_actualizado_en BEFORE UPDATE ON public.ofertas        FOR EACH ROW EXECUTE FUNCTION public.trg_set_actualizado_en();
 CREATE TRIGGER set_actualizado_en BEFORE UPDATE ON public.parametros     FOR EACH ROW EXECUTE FUNCTION public.trg_set_actualizado_en();
@@ -291,13 +302,7 @@ ALTER TABLE ONLY public.agentes
 ALTER TABLE ONLY public.clientes
     ADD CONSTRAINT clientes_telefono_fkey FOREIGN KEY (telefono) REFERENCES public.contactos(telefono);
 
--- cola_espera -> areas, agentes, contactos
-ALTER TABLE ONLY public.cola_espera
-    ADD CONSTRAINT cola_espera_area_id_fkey    FOREIGN KEY (area_id)   REFERENCES public.areas(id);
-ALTER TABLE ONLY public.cola_espera
-    ADD CONSTRAINT cola_espera_agente_id_fkey  FOREIGN KEY (agente_id) REFERENCES public.agentes(id);
-ALTER TABLE ONLY public.cola_espera
-    ADD CONSTRAINT cola_espera_telefono_fkey   FOREIGN KEY (telefono)  REFERENCES public.contactos(telefono);
+
 
 -- contactos -> agentes (auto-referencia diferida: agentes depende de areas, areas no depende de nadie)
 ALTER TABLE ONLY public.contactos

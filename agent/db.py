@@ -37,6 +37,18 @@ class Modulo(Auditoria, Base):
     precio_mensual_cop = Column(Integer, nullable=False)
 
 
+class Combo(Auditoria, Base):
+    """Combos/paquetes de múltiples módulos con precio especial anual."""
+    __tablename__ = "combos"
+
+    id = Column(Integer, primary_key=True)
+    nombre = Column(String, unique=True, nullable=False)
+    descripcion = Column(String, nullable=True)
+    modulos = Column(String, nullable=False)  # Nombres de los módulos separados por coma
+    precio_anual_cop = Column(Integer, nullable=False)
+
+
+
 class Oferta(Auditoria, Base):
     __tablename__ = "ofertas"
 
@@ -58,7 +70,7 @@ class Parametro(Auditoria, Base):
 
 class Area(Auditoria, Base):
     """Catálogo de áreas (comercial, soporte, ...). Maestro compartido: Agente y
-    ColaEspera apuntan aquí por FK en vez de repetir el nombre como string suelto."""
+    Radicado apuntan aquí por FK en vez de repetir el nombre como string suelto."""
     __tablename__ = "areas"
 
     id = Column(Integer, primary_key=True)
@@ -146,23 +158,10 @@ class Conversacion(Auditoria, Base):
     estado = Column(String, nullable=False, default="abierta")  # abierta | cerrada
     tipo_solicitud = Column(String, nullable=True)
     motivo_cierre = Column(String, nullable=True)  # usuario | inactividad
-
-
-class ColaEspera(Auditoria, Base):
-    """Contactos esperando a que se libere un agente de su área (todos ocupados).
-    telefono es PK+FK a Contacto: la relación misma es la clave.
-    area_id es FK a Area: el área solicitada (agente_id aún NULL mientras espera).
-    agente_id: quién terminó atendiendo (se llena al promover, trazabilidad).
-    desde/hasta: inicio/fin de espera (hasta NULL = sigue en cola).
-    duracion_seg: calculada por Postgres (GENERATED), no por la app."""
-    __tablename__ = "cola_espera"
-
-    telefono = Column(String, ForeignKey("contactos.telefono"), primary_key=True)
-    area_id = Column(Integer, ForeignKey("areas.id"), nullable=False)
-    agente_id = Column(Integer, ForeignKey("agentes.id"), nullable=True)
-    desde = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    hasta = Column(DateTime, nullable=True)
-    duracion_seg = Column(
+    espera_desde = Column(DateTime, nullable=True)
+    espera_hasta = Column(DateTime, nullable=True)
+    duracion_espera_seg = Column(
         Integer,
-        Computed("EXTRACT(EPOCH FROM (hasta - desde))::int", persisted=True),
+        Computed("EXTRACT(EPOCH FROM (espera_hasta - espera_desde))::int", persisted=True),
     )
+

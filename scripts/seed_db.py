@@ -33,7 +33,29 @@ PARAMETROS = {
     "timeout_pausa_minutos": ("60", "Minutos de inactividad tras los cuales una pausa (opción B) se cierra sola"),
 }
 
+COMBOS = [
+    {
+        "nombre": "Combo Emprendedor",
+        "descripcion": "Paquete inicial para puntos de venta independientes. Incluye Facturación, POS e Inventario.",
+        "modulos": "Facturación, POS, Inventario",
+        "precio_anual_cop": 990000
+    },
+    {
+        "nombre": "Combo Pyme",
+        "descripcion": "Gestión administrativa y financiera completa. Incluye Facturación, Inventario, Cartera, Cuentas por pagar, Tesorería y Contabilidad.",
+        "modulos": "Facturación, Inventario, Cartera, Cuentas por pagar, Tesorería, Contabilidad",
+        "precio_anual_cop": 1800000
+    },
+    {
+        "nombre": "Combo Full ERP",
+        "descripcion": "Todos los 12 módulos de SysPlus para control total.",
+        "modulos": "Productos, Inventario, Facturación, Cartera, Compras, Cuentas por pagar, Tesorería, Importaciones, CRM, Producción, Nómina, Contabilidad, POS",
+        "precio_anual_cop": 3500000
+    }
+]
+
 if __name__ == "__main__":
+    from agent.db import Combo
     Base.metadata.create_all(sync_engine)
     with SyncSession() as session:
         if session.query(Modulo).count() == 0:
@@ -45,6 +67,21 @@ if __name__ == "__main__":
             print(f"Sembrados {len(PRECIOS_MODULOS)} módulos.")
         else:
             print("Tabla modulos ya tiene datos, no se siembra.")
+
+        if session.query(Combo).count() == 0:
+            session.add_all(
+                Combo(
+                    nombre=c["nombre"],
+                    descripcion=c["descripcion"],
+                    modulos=c["modulos"],
+                    precio_anual_cop=c["precio_anual_cop"]
+                )
+                for c in COMBOS
+            )
+            session.commit()
+            print(f"Sembrados {len(COMBOS)} combos.")
+        else:
+            print("Tabla combos ya tiene datos, no se siembra.")
 
         if session.query(Parametro).count() == 0:
             session.add_all(

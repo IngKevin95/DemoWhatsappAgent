@@ -121,6 +121,7 @@ with open(os.path.join(CONFIG_DIR, "prompts.yaml"), encoding="utf-8") as f:
 TOOL_FUNCTIONS_FIJAS = [
     tools.buscar_en_knowledge,
     tools.consultar_precio_modulo,
+    tools.consultar_combos,
     tools.consultar_disponibilidad_agenda,
     tools.consultar_ticket_soporte,
     tools.consultar_licencia,
@@ -282,6 +283,8 @@ def consultar_precio_modulo(nombre_modulo: str, moneda: str = "EUR", cantidad: i
     resultado = modulos[nombre_modulo].copy()
     resultado["cantidad"] = cantidad
     resultado["total"] = resultado["precio"] * cantidad
+    resultado["periodo"] = "anual"
+    resultado["soporte"] = "incluye soporte técnico por un año"
     return resultado
 
 
