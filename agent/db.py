@@ -23,8 +23,10 @@ class Base(DeclarativeBase):
 class Auditoria:
     """Mixin: creado_en/actualizado_en, mantenidos infaliblemente por trigger de Postgres
     (ver migración) para que también cubran escrituras directas desde NocoDB."""
-    creado_en = Column(DateTime, default=lambda: datetime.now(timezone.utc))
-    actualizado_en = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+    # naive UTC: las columnas son TIMESTAMP WITHOUT TIME ZONE. asyncpg rechaza
+    # datetimes tz-aware contra esas columnas (psycopg2 los toleraba en silencio).
+    creado_en = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    actualizado_en = Column(DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
 
 class Modulo(Auditoria, Base):
@@ -91,7 +93,8 @@ class Contacto(Auditoria, Base):
 
     telefono = Column(String, primary_key=True)
     nombre = Column(String, nullable=False)
-    empresa = Column(String, nullable=True)
+    # empresa vive en clientes.nombre_empresa (perfil de cliente/lead), no aquí:
+    # contactos es "cualquiera que escribe"; los datos de empresa son del cliente.
     correo = Column(String, nullable=True)
     ciudad = Column(String, nullable=True)
     atendido_por = Column(Integer, ForeignKey("agentes.id"), nullable=True)
@@ -122,6 +125,7 @@ class Radicado(Auditoria, Base):
     __tablename__ = "radicados"
 
     id = Column(Integer, primary_key=True)
+    codigo = Column(String, unique=True, nullable=True)
     telefono = Column(String, ForeignKey("contactos.telefono"), nullable=False)
     area_id = Column(Integer, ForeignKey("areas.id"), nullable=False)
     agente_id = Column(Integer, ForeignKey("agentes.id"), nullable=True)

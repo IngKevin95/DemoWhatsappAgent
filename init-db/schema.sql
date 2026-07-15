@@ -71,14 +71,16 @@ ALTER TABLE ONLY public.modulos ALTER COLUMN id SET DEFAULT nextval('public.modu
 -- contactos  (sin FK saliente — es la raíz de la cadena de personas)
 -- ---------------------------------------------------------------------------
 CREATE TABLE public.contactos (
-    telefono       character varying NOT NULL,
-    nombre         character varying NOT NULL,
-    empresa        character varying,
-    correo         character varying,
-    atendido_por   integer,                             -- FK -> agentes.id (abajo)
-    conectado_en   timestamp without time zone,
-    creado_en      timestamp without time zone DEFAULT now(),
-    actualizado_en timestamp without time zone DEFAULT now()
+    telefono             character varying NOT NULL,
+    nombre               character varying NOT NULL,
+    correo               character varying,
+    ciudad               character varying,
+    atendido_por         integer,                             -- FK -> agentes.id (abajo)
+    conectado_en         timestamp without time zone,
+    consentimiento_datos boolean DEFAULT false,
+    canal                character varying DEFAULT 'meta',
+    creado_en            timestamp without time zone DEFAULT now(),
+    actualizado_en       timestamp without time zone DEFAULT now()
 );
 
 
@@ -125,10 +127,12 @@ CREATE TABLE public.clientes (
 -- ---------------------------------------------------------------------------
 CREATE TABLE public.radicados (
     id           integer NOT NULL,
+    codigo       character varying UNIQUE,
     telefono     character varying NOT NULL,
-    area_id      integer,
-    resumen      character varying,
+    area_id      integer NOT NULL,
+    resumen      character varying NOT NULL,
     estado       character varying NOT NULL DEFAULT 'abierto',
+    modo         character varying,                          -- conectado | notificacion_con_contacto | notificacion
     agente_id    integer,
     crm_case_id  character varying,
     email_enviado boolean DEFAULT false,
@@ -169,8 +173,7 @@ CREATE TABLE public.mensajes (
     conversacion_id integer,                            -- FK -> conversaciones.id (EP-006)
     role            character varying,
     content         character varying,
-    "timestamp"     timestamp without time zone,
-    area_id         integer
+    "timestamp"     timestamp without time zone
 );
 
 CREATE SEQUENCE public.mensajes_id_seq AS integer START WITH 1 INCREMENT BY 1 NO MINVALUE NO MAXVALUE CACHE 1;
@@ -252,7 +255,6 @@ CREATE INDEX ix_cola_espera_area_id_hasta    ON public.cola_espera    USING btre
 CREATE INDEX ix_contactos_atendido_por       ON public.contactos      USING btree (atendido_por) WHERE (atendido_por IS NOT NULL);
 CREATE INDEX ix_conversaciones_telefono      ON public.conversaciones USING btree (telefono);
 CREATE INDEX ix_conversaciones_estado        ON public.conversaciones USING btree (estado);
-CREATE INDEX ix_mensajes_area_id             ON public.mensajes       USING btree (area_id) WHERE (area_id IS NOT NULL);
 CREATE INDEX ix_mensajes_telefono            ON public.mensajes       USING btree (telefono);
 CREATE INDEX ix_mensajes_conversacion_id     ON public.mensajes       USING btree (conversacion_id) WHERE (conversacion_id IS NOT NULL);
 CREATE INDEX ix_ofertas_modulo_id            ON public.ofertas        USING btree (modulo_id);
@@ -307,9 +309,7 @@ ALTER TABLE ONLY public.conversaciones
 ALTER TABLE ONLY public.conversaciones
     ADD CONSTRAINT conversaciones_radicado_id_fkey FOREIGN KEY (radicado_id) REFERENCES public.radicados(id);
 
--- mensajes -> areas, conversaciones
-ALTER TABLE ONLY public.mensajes
-    ADD CONSTRAINT mensajes_area_id_fkey         FOREIGN KEY (area_id)         REFERENCES public.areas(id);
+-- mensajes -> conversaciones
 ALTER TABLE ONLY public.mensajes
     ADD CONSTRAINT mensajes_conversacion_id_fkey FOREIGN KEY (conversacion_id) REFERENCES public.conversaciones(id);
 

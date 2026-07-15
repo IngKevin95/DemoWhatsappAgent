@@ -50,6 +50,9 @@ services:
     env_file:
       - .env
     environment:
+      # ponytail: sin este cap, workers=cpu*2+1 (=65 en host de 32 cores) abre
+      # más pools que max_connections de Postgres (100) -> "too many clients".
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-4}
       ESPOCRM_URL: http://espocrm
       ESPOCRM_API_KEY: ${ESPOCRM_API_KEY:-}
       FIREBIRD_HOST: firebird

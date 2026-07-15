@@ -32,25 +32,76 @@ def _e164(telefono: str) -> str:
     return telefono if telefono.startswith("+") else f"+{telefono}"
 
 
+def _componer_descripcion(interes: str, sector, actividad, empleados, identificacion, nit) -> str:
+    """El Lead de EspoCRM no tiene campos para cédula/NIT/sector/actividad/empleados.
+    Se vuelcan en description como bloque estructurado para que TODO viaje al CRM."""
+    lineas = [interes] if interes else []
+    perfil = [
+        ("Identificación", identificacion), ("NIT empresa", nit),
+        ("Sector", sector), ("Actividad", actividad), ("Empleados", empleados),
+    ]
+    detalle = [f"{k}: {v}" for k, v in perfil if v]
+    if detalle:
+        lineas.append("--- Perfil ---\n" + "\n".join(detalle))
+    return "\n\n".join(lineas)
+
+
 # FIX-REPAIR-003: Apply retry decorator for consistency with Google integration
 @retry(max_attempts=3, backoff_base=2.0, exceptions=(Exception,))
-def crear_lead(nombre: str, telefono: str, empresa: str, correo: str, interes: str) -> dict:
+def crear_lead(
+    nombre: str, telefono: str, empresa: str, correo: str, interes: str,
+    sector: str | None = None, actividad: str | None = None, empleados: str | None = None,
+    identificacion: str | None = None, nit: str | None = None, ciudad: str | None = None,
+) -> dict:
+    """Upsert de Lead por teléfono: si ya existe lo actualiza (enriquece), si no lo crea.
+    Manda TODOS los datos recolectados: correo->emailAddress, ciudad->addressCity, y
+    cédula/NIT/sector/actividad/empleados en description (el Lead no tiene campos propios)."""
+    existente = consultar_lead(telefono)
+    # Al enriquecer un lead ya creado (p.ej. registrar_cliente añade cédula) sin
+    # interes nuevo, preservar el interes original que ya vive en su description.
+    if existente and not interes:
+        interes = (existente.get("description") or "").split("\n\n--- Perfil ---")[0]
+
     body = {
         "lastName": nombre,
         "phoneNumber": _e164(telefono),
         "accountName": empresa,
-        "description": interes,
+        "description": _componer_descripcion(interes, sector, actividad, empleados, identificacion, nit),
     }
     # Solo enviar email si es un email válido; EspoCRM rechaza (400) uno mal formado.
     if correo and _EMAIL_RE.match(correo.strip()):
         body["emailAddress"] = correo.strip()
-    r = httpx.post(f"{BASE_URL}/api/v1/Lead", json=body, headers=_headers(), timeout=TIMEOUT)
+    if ciudad:
+        body["addressCity"] = ciudad
+    body = {k: v for k, v in body.items() if v not in (None, "")}
+
+    if existente:
+        r = httpx.put(f"{BASE_URL}/api/v1/Lead/{existente['id']}", json=body, headers=_headers(), timeout=TIMEOUT)
+    else:
+        r = httpx.post(f"{BASE_URL}/api/v1/Lead", json=body, headers=_headers(), timeout=TIMEOUT)
+        # 409 = EspoCRM detectó duplicado por nombre/email (no por teléfono). Recuperar
+        # el existente por teléfono y actualizarlo; si no hay match, intentar por email.
+        if r.status_code == 409:
+            prev = consultar_lead(telefono)
+            if not prev and correo:
+                prev = consultar_lead_por_email(correo)
+            if not prev:
+                return {}
+            r = httpx.put(f"{BASE_URL}/api/v1/Lead/{prev['id']}", json=body, headers=_headers(), timeout=TIMEOUT)
     r.raise_for_status()
     return r.json()
 
 
 def consultar_lead(telefono: str) -> dict | None:
     params = {"where[0][type]": "equals", "where[0][attribute]": "phoneNumber", "where[0][value]": _e164(telefono)}
+    r = httpx.get(f"{BASE_URL}/api/v1/Lead", params=params, headers=_headers(), timeout=TIMEOUT)
+    r.raise_for_status()
+    lista = r.json().get("list", [])
+    return lista[0] if lista else None
+
+
+def consultar_lead_por_email(email: str) -> dict | None:
+    params = {"where[0][type]": "equals", "where[0][attribute]": "emailAddress", "where[0][value]": email}
     r = httpx.get(f"{BASE_URL}/api/v1/Lead", params=params, headers=_headers(), timeout=TIMEOUT)
     r.raise_for_status()
     lista = r.json().get("list", [])

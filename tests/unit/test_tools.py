@@ -74,33 +74,48 @@ class TestAgendarCita:
 class TestReclasificarCaso:
     """Tests for case reclassification."""
 
+    def _mock_session(self):
+        from unittest.mock import MagicMock
+        session = MagicMock()
+        session.__enter__ = MagicMock(return_value=session)
+        session.__exit__ = MagicMock(return_value=False)
+        session.query.return_value.filter.return_value.first.return_value = None
+        session.get.return_value = None
+        return session
+
     def test_reclasificar_caso_estructura(self):
         """Reclassification returns dict."""
-        resultado = reclasificar_caso_sin_licencia(
-            caso_id="CASO-001",
-            telefono="34912345678",
-            nombre="Juan Pérez"
-        )
-        assert isinstance(resultado, dict)
+        session = self._mock_session()
+        with patch("agent.tools.SyncSession", return_value=session):
+            resultado = reclasificar_caso_sin_licencia(
+                caso_id="CASO-001",
+                telefono="34912345678",
+                nombre="Juan Pérez"
+            )
+            assert isinstance(resultado, dict)
 
     def test_reclasificar_caso_tiene_campos(self):
         """Result has expected fields."""
-        resultado = reclasificar_caso_sin_licencia(
-            caso_id="CASO-001",
-            telefono="34912345678",
-            nombre="Juan Pérez"
-        )
-        if resultado:
-            assert "puede_procesar" in resultado or "estado" in resultado or len(resultado) > 0
+        session = self._mock_session()
+        with patch("agent.tools.SyncSession", return_value=session):
+            resultado = reclasificar_caso_sin_licencia(
+                caso_id="CASO-001",
+                telefono="34912345678",
+                nombre="Juan Pérez"
+            )
+            if resultado:
+                assert "puede_procesar" in resultado or "estado" in resultado or len(resultado) > 0
 
     def test_reclasificar_caso_con_nombre_vacio(self):
         """Reclassification with empty name."""
-        resultado = reclasificar_caso_sin_licencia(
-            caso_id="CASO-002",
-            telefono="34912345678",
-            nombre=""
-        )
-        assert isinstance(resultado, dict)
+        session = self._mock_session()
+        with patch("agent.tools.SyncSession", return_value=session):
+            resultado = reclasificar_caso_sin_licencia(
+                caso_id="CASO-002",
+                telefono="34912345678",
+                nombre=""
+            )
+            assert isinstance(resultado, dict)
 
 
 
