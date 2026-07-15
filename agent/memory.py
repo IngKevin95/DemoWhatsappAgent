@@ -121,3 +121,15 @@ async def limpiar_historial(telefono: str):
         for m in result.scalars().all():
             await session.delete(m)
         await session.commit()
+
+
+async def ligar_radicado(conversacion_id: int, radicado_id: int) -> bool:
+    from .db import Conversacion
+    async with SessionLocal() as session:
+        result = await session.execute(select(Conversacion).where(Conversacion.id == conversacion_id))
+        conv = result.scalars().first()
+        if conv:
+            conv.radicado_id = radicado_id
+            await session.commit()
+            return True
+        return False

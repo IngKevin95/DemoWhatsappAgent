@@ -127,6 +127,7 @@ CREATE TABLE public.clientes (
 -- ---------------------------------------------------------------------------
 CREATE TABLE public.radicados (
     id           integer NOT NULL,
+    codigo       character varying UNIQUE,
     telefono     character varying NOT NULL,
     area_id      integer NOT NULL,
     resumen      character varying NOT NULL,

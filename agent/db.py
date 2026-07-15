@@ -125,6 +125,7 @@ class Radicado(Auditoria, Base):
     __tablename__ = "radicados"
 
     id = Column(Integer, primary_key=True)
+    codigo = Column(String, unique=True, nullable=True)
     telefono = Column(String, ForeignKey("contactos.telefono"), nullable=False)
     area_id = Column(Integer, ForeignKey("areas.id"), nullable=False)
     agente_id = Column(Integer, ForeignKey("agentes.id"), nullable=True)

@@ -7,6 +7,7 @@ consultan Firebird directamente. Ambos viven en infra de demo separada
 import logging
 import os
 import threading
+import unicodedata
 import uuid
 from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
@@ -22,6 +23,12 @@ logger = logging.getLogger(__name__)
 
 KNOWLEDGE_DIR = Path(__file__).parent.parent / "knowledge"
 EMAIL_SOPORTE = os.getenv("EMAIL_SOPORTE", "soporte@sysplus.com")
+
+
+def _norm(s: str) -> str:
+    """minúsculas sin acentos, para matchear 'Nomina' con 'Nómina'."""
+    s = unicodedata.normalize("NFKD", s or "")
+    return "".join(c for c in s if not unicodedata.combining(c)).lower().strip()
 
 # ponytail: mismo patrón sync de agent/providers/meta.py, duplicado a propósito
 # porque tools.py corre sync y el proveedor async vive en la capa del webhook.
@@ -53,9 +60,9 @@ def cargar_info_negocio() -> str:
 
 def buscar_en_knowledge(modulo: str) -> str:
     contenido = cargar_info_negocio()
-    bloques = contenido.split("## ")
-    for bloque in bloques:
-        if bloque.lower().startswith(modulo.lower()):
+    objetivo = _norm(modulo)
+    for bloque in contenido.split("## "):
+        if _norm(bloque).startswith(objetivo):
             return "## " + bloque.strip()
     with SyncSession() as session:
         nombres = [m.nombre for m in session.query(Modulo).all()]
@@ -77,8 +84,13 @@ def _oferta_activa(session, modulo_id: int) -> Oferta | None:
 
 
 def consultar_precio_modulo(modulo: str) -> dict:
+    objetivo = _norm(modulo)
     with SyncSession() as session:
-        mod = session.query(Modulo).filter(Modulo.nombre.ilike(modulo)).first()
+        mods = session.query(Modulo).all()
+        # exacto sin acentos; si no, el nombre del módulo contenido en la consulta
+        # (p.ej. "modulo de nomina" -> "Nómina"). No al revés, para no matchear parciales.
+        mod = next((m for m in mods if _norm(m.nombre) == objetivo), None) \
+            or next((m for m in mods if _norm(m.nombre) in objetivo), None)
         if not mod:
             return {"error": f"Módulo '{modulo}' no encontrado."}
         oferta = _oferta_activa(session, mod.id)
@@ -412,13 +424,15 @@ def reclasificar_caso_sin_licencia(caso_id: str, telefono: str, nombre: str) -> 
     NO tiene licencia activa: comenta y bloquea (Rejected) el caso original en EspoCRM,
     y lo reescala a comercial (nuevo radicado). Llamar apenas consultar_licencia devuelva
     sin_licencia si ya se había creado un ticket/escalamiento antes de esa verificación."""
-    try:
-        radicado_id = int(caso_id.removeprefix("ESC-"))
-    except ValueError:
-        return {"estado": "error", "mensaje": f"caso_id inválido: {caso_id}"}
-
     with SyncSession() as session:
-        radicado = session.get(Radicado, radicado_id)
+        radicado = session.query(Radicado).filter(Radicado.codigo == caso_id).first()
+        if not radicado:
+            try:
+                radicado_id = int(caso_id.removeprefix("ESC-"))
+                radicado = session.get(Radicado, radicado_id)
+            except ValueError:
+                pass
+
         if not radicado:
             return {"estado": "error", "mensaje": f"No existe el radicado {caso_id}."}
 
@@ -454,22 +468,27 @@ def escalar_a_humano(telefono: str, nombre: str, resumen_caso: str, area: str) -
             Conversacion.estado == "abierta"
         ).order_by(Conversacion.id.desc()).first()
 
+        import uuid
         if conv and conv.radicado_id:
             radicado = session.query(Radicado).get(conv.radicado_id)
             radicado.resumen = resumen_caso
             radicado.area_id = area_row.id
             radicado.estado = "escalado"
+            if not radicado.codigo:
+                radicado.codigo = f"ESC-{str(uuid.uuid4())[:8].upper()}"
             session.flush()
-            caso_id = f"ESC-{radicado.id}"
+            caso_id = radicado.codigo
         else:
+            codigo_rand = f"ESC-{str(uuid.uuid4())[:8].upper()}"
             radicado = Radicado(
                 telefono=telefono, area_id=area_row.id, resumen=resumen_caso, estado="escalado",
+                codigo=codigo_rand
             )
             session.add(radicado)
             session.flush()
             if conv:
                 conv.radicado_id = radicado.id
-            caso_id = f"ESC-{radicado.id}"
+            caso_id = radicado.codigo
 
         try:
             crm_case = espocrm.crear_caso(telefono, f"[{caso_id}] {resumen_caso}", area)

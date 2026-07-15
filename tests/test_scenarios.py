@@ -124,12 +124,26 @@ async def correr_caso(caso: dict) -> tuple[bool, list[str]]:
     telefono = telefono_para(caso["id"])
     errores = []
 
+    from agent.db import Conversacion
+    from agent.memory import Mensaje, abrir_conversacion
     with SyncSession() as session:
+        # Clean up database records for this phone number
+        session.query(Mensaje).filter(Mensaje.telefono == telefono).delete()
+        session.query(Conversacion).filter(Conversacion.telefono == telefono).delete()
         for modelo in (Cliente, ColaEspera, Contacto):
             obj = session.get(modelo, telefono)
             if obj:
                 session.delete(obj)
         session.commit()
+
+    # Pre-create Contacto with consent:
+    with SyncSession() as session:
+        contacto = Contacto(telefono=telefono, nombre="Usuario Prueba", consentimiento_datos=True)
+        session.add(contacto)
+        session.commit()
+
+    # Open conversation for this run:
+    conversacion_id = await abrir_conversacion(telefono)
 
     # ponytail: pacing opcional para no reventar la cuota free-tier de Gemini
     # (15 req/min en gemini-*-lite) al correr los 28 casos en ráfaga. Default 0.
@@ -140,9 +154,9 @@ async def correr_caso(caso: dict) -> tuple[bool, list[str]]:
         if pacing:
             await asyncio.sleep(pacing)
         historial = await obtener_historial(telefono)
-        respuesta = await generar_respuesta(telefono, turno["usuario"], historial)
-        await guardar_mensaje(telefono, "user", turno["usuario"])
-        await guardar_mensaje(telefono, "assistant", respuesta)
+        respuesta = await generar_respuesta(mensaje=turno["usuario"], telefono=telefono, historial=historial)
+        await guardar_mensaje(telefono, "user", turno["usuario"], conversacion_id=conversacion_id)
+        await guardar_mensaje(telefono, "assistant", respuesta, conversacion_id=conversacion_id)
 
         if not respuesta or not respuesta.strip():
             errores.append("respuesta vacía")

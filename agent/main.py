@@ -19,9 +19,11 @@ from sqlalchemy import text
 from .brain import generar_respuesta
 from .db import Contacto, Parametro, SyncSession
 from .memory import (
+    abrir_conversacion,
     guardar_mensaje,
     inicializar_db,
     limpiar_historial,
+    obtener_conversacion_activa,
     obtener_historial,
     telefonos_con_actividad_reciente,
     ultimo_mensaje,
@@ -198,18 +200,21 @@ async def _revisar_inactividad():
                     continue
                 segundos = _segundos_desde(m["timestamp"])
                 
+                # Obtener la conversación activa para relacionar el mensaje
+                conv_id = await obtener_conversacion_activa(telefono)
+
                 with SyncSession() as session:
                     contacto = session.query(Contacto).filter(Contacto.telefono == telefono).first()
                     canal = contacto.canal if contacto else "meta"
                 
                 if m["role"] == "user" and segundos > CHECKIN_INACTIVIDAD_SEGUNDOS:
-                    await guardar_mensaje(telefono, "assistant", MENSAJE_CHECKIN_1)
+                    await guardar_mensaje(telefono, "assistant", MENSAJE_CHECKIN_1, conversacion_id=conv_id)
                     await enviar_mensaje_seguro(telefono, MENSAJE_CHECKIN_1, canal=canal)
                 elif m["role"] == "assistant" and m["content"] == MENSAJE_CHECKIN_1 and segundos > CHECKIN_INACTIVIDAD_SEGUNDOS:
-                    await guardar_mensaje(telefono, "assistant", MENSAJE_CHECKIN_2)
+                    await guardar_mensaje(telefono, "assistant", MENSAJE_CHECKIN_2, conversacion_id=conv_id)
                     await enviar_mensaje_seguro(telefono, MENSAJE_CHECKIN_2, canal=canal)
                 elif m["role"] == "assistant" and m["content"] == MENSAJE_CHECKIN_2 and segundos > CIERRE_INACTIVIDAD_SEGUNDOS:
-                    await guardar_mensaje(telefono, "assistant", MENSAJE_CIERRE)
+                    await guardar_mensaje(telefono, "assistant", MENSAJE_CIERRE, conversacion_id=conv_id)
                     await enviar_mensaje_seguro(telefono, MENSAJE_CIERRE, canal=canal)
                     await limpiar_historial(telefono)
                     try:
@@ -330,7 +335,6 @@ async def procesar_mensaje_entrante(mensaje, canal="meta"):
     if mensaje is None:
         return {"status": "ignorado"}
 
-    from .memory import abrir_conversacion, obtener_conversacion_activa
     with SyncSession() as session:
         contacto = session.query(Contacto).filter(Contacto.telefono == mensaje.telefono).first()
         es_nuevo = contacto is None
@@ -382,7 +386,9 @@ async def procesar_mensaje_entrante(mensaje, canal="meta"):
     with SyncSession() as session:
         from .db import Conversacion
         conv = session.query(Conversacion).get(conversacion_id)
-        if conv and not conv.tipo_solicitud:
+        # reclasifica mientras siga sin definir u "otro": el 1er mensaje suele ser un
+        # saludo/datos ("otro"); el interés real (comercial/soporte) llega después.
+        if conv and conv.tipo_solicitud in (None, "otro"):
             from .brain import clasificar_intencion
             # se clasifica asincronamente
             tipo = await clasificar_intencion(mensaje.texto)
@@ -500,7 +506,11 @@ async def liberar_agente(telefono_cliente: str):
         conectado.conectado_en = None
         session.commit()
 
-    await guardar_mensaje(telefono_cliente, "assistant", MENSAJE_REACTIVACION)
+    conv_id = await obtener_conversacion_activa(telefono_cliente)
+    if not conv_id:
+        conv_id = await abrir_conversacion(telefono_cliente)
+
+    await guardar_mensaje(telefono_cliente, "assistant", MENSAJE_REACTIVACION, conversacion_id=conv_id)
     with SyncSession() as session:
         contacto = session.query(Contacto).filter(Contacto.telefono == telefono_cliente).first()
         canal = contacto.canal if contacto else "meta"
