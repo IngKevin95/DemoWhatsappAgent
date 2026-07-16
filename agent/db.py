@@ -142,10 +142,13 @@ class Radicado(Auditoria, Base):
     area_id = Column(Integer, ForeignKey("areas.id"), nullable=False)
     agente_id = Column(Integer, ForeignKey("agentes.id"), nullable=True)
     resumen = Column(String, nullable=False)
-    estado = Column(String, nullable=False)  # escalado | en_cola
+    estado = Column(String, nullable=False)  # escalado | en_cola | resuelto
     modo = Column(String, nullable=True)  # conectado | notificacion_con_contacto | notificacion
     email_enviado = Column(Boolean, default=False)
     crm_case_id = Column(String, nullable=True)
+    # Momento en que el caso se resolvió/cerró. NULL = sigue abierto. creado_en
+    # actúa como escalado_en, así el tiempo de resolución es resuelto_en - creado_en.
+    resuelto_en = Column(DateTime, nullable=True)
 
 
 class Conversacion(Auditoria, Base):

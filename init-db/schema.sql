@@ -136,6 +136,7 @@ CREATE TABLE public.radicados (
     agente_id    integer,
     crm_case_id  character varying,
     email_enviado boolean DEFAULT false,
+    resuelto_en  timestamp without time zone,              -- NULL = abierto; caso cerrado en este instante
     creado_en    timestamp without time zone DEFAULT now(),
     actualizado_en timestamp without time zone DEFAULT now()
 );
