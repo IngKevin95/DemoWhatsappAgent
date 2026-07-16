@@ -7,3 +7,14 @@ datasources:
     access: proxy
     isDefault: true
     editable: true
+
+  - name: PostgreSQL
+    type: postgres
+    url: postgres:5432
+    user: sysbot
+    secureJsonData:
+      password: sysbot
+    jsonData:
+      database: sysbot
+      sslmode: disable
+    editable: true

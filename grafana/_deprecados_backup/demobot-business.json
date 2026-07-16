@@ -1,0 +1,111 @@
+{
+  "title": "DemoBot Business Analytics",
+  "description": "Functional KPI monitoring for Sales, Support and Operations leaders",
+  "tags": ["demobot", "business", "leads", "escalations"],
+  "timezone": "browser",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Distribución Clientes vs Leads",
+      "type": "piechart",
+      "datasource": "PostgreSQL",
+      "targets": [
+        {
+          "rawSql": "SELECT count(*) as \"value\", tipo as \"metric\" FROM clientes GROUP BY tipo;",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "reduceOptions": {
+          "values": true,
+          "calcs": ["lastNotNull"]
+        }
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 }
+    },
+    {
+      "id": 2,
+      "title": "Escalamientos por Área (Soporte vs Comercial)",
+      "type": "piechart",
+      "datasource": "PostgreSQL",
+      "targets": [
+        {
+          "rawSql": "SELECT count(*) as \"value\", a.nombre as \"metric\" FROM radicados r JOIN areas a ON r.area_id = a.id GROUP BY a.nombre;",
+          "format": "table"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 }
+    },
+    {
+      "id": 3,
+      "title": "Estado de Casos Escalados",
+      "type": "bargauge",
+      "datasource": "PostgreSQL",
+      "targets": [
+        {
+          "rawSql": "SELECT count(*) as \"value\", estado as \"metric\" FROM radicados GROUP BY estado;",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "orientation": "horizontal",
+        "displayMode": "lcd"
+      },
+      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 }
+    },
+    {
+      "id": 4,
+      "title": "Tiempo Promedio de Espera en Cola",
+      "type": "stat",
+      "datasource": "PostgreSQL",
+      "targets": [
+        {
+          "rawSql": "SELECT COALESCE(AVG(duracion_espera_seg), 0) as \"value\" FROM conversaciones WHERE duracion_espera_seg IS NOT NULL;",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        }
+      },
+      "options": {
+        "textMode": "value",
+        "colorMode": "value"
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 }
+    },
+    {
+      "id": 5,
+      "title": "Motivo de Cierre de Chats",
+      "type": "piechart",
+      "datasource": "PostgreSQL",
+      "targets": [
+        {
+          "rawSql": "SELECT count(*) as \"value\", COALESCE(motivo_cierre, 'Abierto/Activo') as \"metric\" FROM conversaciones GROUP BY motivo_cierre;",
+          "format": "table"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 }
+    },
+    {
+      "id": 6,
+      "title": "Últimos Radicados y Casos Escalados",
+      "type": "table",
+      "datasource": "PostgreSQL",
+      "targets": [
+        {
+          "rawSql": "SELECT r.id as \"ID Radicado\", r.codigo as \"Código\", c.nombre as \"Contacto\", a.nombre as \"Área\", r.resumen as \"Descripción\", r.estado as \"Estado\", r.creado_en as \"Fecha\" FROM radicados r JOIN contactos c ON r.telefono = c.telefono JOIN areas a ON r.area_id = a.id ORDER BY r.creado_en DESC LIMIT 10;",
+          "format": "table"
+        }
+      ],
+      "gridPos": { "h": 8, "w": 24, "x": 0, "y": 16 }
+    }
+  ],
+  "refresh": "5s",
+  "version": 1,
+  "time": {
+    "from": "now-30d",
+    "to": "now"
+  }
+}

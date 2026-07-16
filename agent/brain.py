@@ -11,6 +11,7 @@ from google.genai import errors, types
 
 from . import tools
 from .middleware.circuit_breaker import CircuitBreaker
+from .prometheus_metrics import demobot_errors_total
 
 logger = logging.getLogger(__name__)
 
@@ -227,18 +228,22 @@ async def generar_respuesta(
                         )
                 break
             except asyncio.TimeoutError:
+                demobot_errors_total.labels(error_type="gemini_timeout").inc()
                 logger.warning("Timeout en Gemini para %s después de %.1fs", telefono, timeout_segundos)
                 return random.choice(RESPUESTAS_FALLBACK)
 
         except errors.ClientError as e:
             if e.code == 429 and intento == 0:
+                demobot_errors_total.labels(error_type="gemini_rate_limit").inc()
                 espera = _retry_delay_segundos(e)
                 logger.warning("429 de Gemini para %s, reintentando en %.1fs", telefono, espera)
                 await asyncio.sleep(espera)
                 continue
+            demobot_errors_total.labels(error_type="gemini_client_error").inc()
             logger.exception("Fallo generando respuesta para %s", telefono)
             break
         except Exception:
+            demobot_errors_total.labels(error_type="gemini_exception").inc()
             logger.exception("Fallo generando respuesta para %s", telefono)
             break
 

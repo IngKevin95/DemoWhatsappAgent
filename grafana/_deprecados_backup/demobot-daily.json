@@ -1,0 +1,123 @@
+{
+  "title": "DemoBot - Daily Operational Dashboard",
+  "description": "Real-time and daily operation tracking for supervisor and managers",
+  "tags": ["demobot", "daily", "operations", "real-time"],
+  "timezone": "browser",
+  "panels": [
+    {
+      "id": 1,
+      "title": "Conversaciones Activas/Abiertas",
+      "type": "stat",
+      "datasource": "PostgreSQL",
+      "targets": [
+        {
+          "rawSql": "SELECT count(*) as \"value\" FROM conversaciones WHERE estado = 'abierta';",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          }
+        }
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 0, "y": 0 }
+    },
+    {
+      "id": 2,
+      "title": "Conversaciones Iniciadas Hoy",
+      "type": "stat",
+      "datasource": "PostgreSQL",
+      "targets": [
+        {
+          "rawSql": "SELECT count(*) as \"value\" FROM conversaciones WHERE creado_en >= CURRENT_DATE;",
+          "format": "table"
+        }
+      ],
+      "gridPos": { "h": 6, "w": 6, "x": 6, "y": 0 }
+    },
+    {
+      "id": 3,
+      "title": "Casos Escalados a Humano Hoy",
+      "type": "stat",
+      "datasource": "PostgreSQL",
+      "targets": [
+        {
+          "rawSql": "SELECT count(*) as \"value\" FROM radicados WHERE creado_en >= CURRENT_DATE;",
+          "format": "table"
+        }
+      ],
+      "gridPos": { "h": 6, "w": 6, "x": 12, "y": 0 }
+    },
+    {
+      "id": 4,
+      "title": "Casos Pendientes en Cola",
+      "type": "stat",
+      "datasource": "PostgreSQL",
+      "targets": [
+        {
+          "rawSql": "SELECT count(*) as \"value\" FROM radicados WHERE estado = 'en_cola';",
+          "format": "table"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "orange"
+          }
+        }
+      },
+      "gridPos": { "h": 6, "w": 6, "x": 18, "y": 0 }
+    },
+    {
+      "id": 5,
+      "title": "Distribución Horaria de Chats (Hoy)",
+      "type": "bargauge",
+      "datasource": "PostgreSQL",
+      "targets": [
+        {
+          "rawSql": "SELECT EXTRACT(HOUR FROM creado_en) as \"metric\", count(*) as \"value\" FROM conversaciones WHERE creado_en >= CURRENT_DATE GROUP BY 1 ORDER BY 1;",
+          "format": "table"
+        }
+      ],
+      "options": {
+        "orientation": "vertical"
+      },
+      "gridPos": { "h": 10, "w": 12, "x": 0, "y": 6 }
+    },
+    {
+      "id": 6,
+      "title": "Uso de Herramientas del Agente (Últimos 15m)",
+      "type": "timeseries",
+      "datasource": "Prometheus",
+      "targets": [
+        {
+          "expr": "sum by (tool_name) (rate(demobot_tool_calls_total[15m]))"
+        }
+      ],
+      "gridPos": { "h": 10, "w": 12, "x": 12, "y": 6 }
+    },
+    {
+      "id": 7,
+      "title": "Actividad de Chats Recientes (Últimas 24 Horas)",
+      "type": "table",
+      "datasource": "PostgreSQL",
+      "targets": [
+        {
+          "rawSql": "SELECT c.nombre as \"Cliente\", conv.estado as \"Estado\", conv.tipo_solicitud as \"Área de Interés\", COALESCE(conv.motivo_cierre, 'En línea') as \"Estado Cierre\", conv.creado_en as \"Fecha Inicio\" FROM conversaciones conv JOIN contactos c ON conv.telefono = c.telefono WHERE conv.creado_en >= now() - interval '24 hours' ORDER BY conv.creado_en DESC LIMIT 15;",
+          "format": "table"
+        }
+      ],
+      "gridPos": { "h": 10, "w": 24, "x": 0, "y": 16 }
+    }
+  ],
+  "refresh": "5s",
+  "version": 1,
+  "time": {
+    "from": "now/d",
+    "to": "now"
+  }
+}

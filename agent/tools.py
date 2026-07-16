@@ -745,3 +745,40 @@ def finalizar_conversacion(telefono: str, motivo_cierre: str = "usuario") -> dic
             session.commit()
             return {"status": "cerrada", "motivo": motivo_cierre}
         return {"status": "error", "mensaje": "No hay conversación abierta para cerrar."}
+
+
+# Dynamic decoration for Prometheus instrumentation
+from functools import wraps
+from .prometheus_metrics import demobot_tool_calls_total
+
+def _instrument_tool(func):
+    @wraps(func)
+    def wrapper(*args, **kwargs):
+        try:
+            res = func(*args, **kwargs)
+            demobot_tool_calls_total.labels(tool_name=func.__name__, status="success").inc()
+            return res
+        except Exception as e:
+            demobot_tool_calls_total.labels(tool_name=func.__name__, status="failure").inc()
+            raise e
+    return wrapper
+
+# Decorate public tool functions
+buscar_en_knowledge = _instrument_tool(buscar_en_knowledge)
+consultar_precio_modulo = _instrument_tool(consultar_precio_modulo)
+consultar_combos = _instrument_tool(consultar_combos)
+consultar_disponibilidad_agenda = _instrument_tool(consultar_disponibilidad_agenda)
+consultar_ticket_soporte = _instrument_tool(consultar_ticket_soporte)
+consultar_licencia = _instrument_tool(consultar_licencia)
+crear_tarea = _instrument_tool(crear_tarea)
+consultar_ofertas_activas = _instrument_tool(consultar_ofertas_activas)
+consultar_parametro = _instrument_tool(consultar_parametro)
+registrar_lead_crm = _instrument_tool(registrar_lead_crm)
+consultar_estado_cliente = _instrument_tool(consultar_estado_cliente)
+guardar_datos_contacto = _instrument_tool(guardar_datos_contacto)
+agendar_cita = _instrument_tool(agendar_cita)
+crear_ticket_soporte = _instrument_tool(crear_ticket_soporte)
+escalar_a_humano = _instrument_tool(escalar_a_humano)
+registrar_cliente = _instrument_tool(registrar_cliente)
+finalizar_conversacion = _instrument_tool(finalizar_conversacion)
+

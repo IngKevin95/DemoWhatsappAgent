@@ -286,6 +286,31 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
+import time
+
+@app.middleware("http")
+async def add_prometheus_metrics(request: Request, call_next):
+    if request.url.path == "/metrics":
+        return await call_next(request)
+
+    start_time = time.time()
+    status_code = "500"
+    try:
+        response = await call_next(request)
+        status_code = str(response.status_code)
+        return response
+    except Exception as e:
+        status_code = "500"
+        demobot_errors_total.labels(error_type="http_error").inc()
+        raise e
+    finally:
+        duration = time.time() - start_time
+        endpoint = request.url.path
+        method = request.method
+        http_requests_total.labels(method=method, endpoint=endpoint, status=status_code).inc()
+        http_request_duration_seconds.labels(method=method, endpoint=endpoint, status=status_code).observe(duration)
+
+
 # Servir PDFs de fichas técnicas de módulos
 static_dir = os.path.join(os.path.dirname(__file__), "..", "static")
 app.mount("/static", StaticFiles(directory=static_dir), name="static")
@@ -303,7 +328,6 @@ async def health():
     now = datetime.now(timezone.utc)
     uptime_seconds = int((now - _app_start_time).total_seconds())
 
-    # Run all probes in parallel with asyncio
     postgres_status, gemini_status, espocrm_status, firebird_status = await asyncio.gather(
         probe_postgres(timeout=3),
         probe_gemini(timeout=5),
@@ -311,6 +335,16 @@ async def health():
         probe_firebird(timeout=3),
         return_exceptions=False
     )
+
+    # Update Prometheus dependency health metrics
+    try:
+        status_map = {"ok": 1.0, "degraded": 0.5, "error": 0.0}
+        demobot_dependency_health.labels(dependency="postgres").set(status_map.get(postgres_status, 0.0))
+        demobot_dependency_health.labels(dependency="gemini").set(status_map.get(gemini_status, 0.0))
+        demobot_dependency_health.labels(dependency="espocrm").set(status_map.get(espocrm_status, 0.0))
+        demobot_dependency_health.labels(dependency="firebird").set(status_map.get(firebird_status, 0.0))
+    except Exception as e:
+        logger.error("Failed to update dependency health metrics: %s", str(e))
 
     return JSONResponse({
         "status": "healthy",
@@ -343,6 +377,25 @@ async def ready():
 @app.get("/metrics", response_class=Response)
 async def metrics():
     """Prometheus metrics endpoint: returns real instrumented metrics."""
+    # Update uptime
+    try:
+        now = datetime.now(timezone.utc)
+        uptime_seconds = int((now - _app_start_time).total_seconds())
+        demobot_uptime_seconds.set(uptime_seconds)
+    except Exception as e:
+        logger.error("Failed to update uptime metric: %s", str(e))
+
+    # Update active conversations count
+    try:
+        async with SessionLocal() as session:
+            result = await session.execute(
+                select(Conversacion).where(Conversacion.estado == "abierta")
+            )
+            active_count = len(result.scalars().all())
+            demobot_active_conversations.set(active_count)
+    except Exception as e:
+        logger.error("Failed to count active conversations for metrics: %s", str(e))
+
     metrics_data = get_metrics()
     return Response(content=metrics_data, media_type="text/plain; charset=utf-8; version=0.0.4")
 
