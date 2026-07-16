@@ -351,6 +351,62 @@ def guardar_datos_contacto(
         return {"telefono": telefono, "estado": "guardado"}
 
 
+def _obtener_horario_atencion() -> str:
+    from .db import SyncSession, Parametro
+    try:
+        with SyncSession() as session:
+            param = session.query(Parametro).filter(Parametro.clave == "horario_atencion").first()
+            if param and param.valor:
+                return param.valor
+    except Exception as e:
+        logger.error(f"Error al obtener horario_atencion de DB: {e}")
+    return "Lunes a Viernes de 8am a 6pm"
+
+
+def _es_error_de_cuota_google(e: Exception) -> bool:
+    from googleapiclient.errors import HttpError
+    if isinstance(e, HttpError):
+        if e.resp.status in (403, 429):
+            content_str = str(e.content).lower()
+            if any(k in content_str for k in ("quota", "rate", "exhaust", "limit")):
+                return True
+    err_str = str(e).lower()
+    if any(k in err_str for k in ("quota", "ratelimit", "resource_exhausted", "rate limit")):
+        return True
+    return False
+
+
+def _manejar_error_cuota_google(e: Exception, area: str, telefono: str | None = None, nombre: str | None = None, resumen: str | None = None):
+    logger.exception("Error de cuota de Google detectado: %s", e)
+    
+    # 1. Enviar correo a infra
+    email_infra = os.getenv("EMAIL_INFRA")
+    if email_infra:
+        try:
+            enviar_email(
+                email_infra,
+                "ALERTA: Límite de Cuota de Google Excedido en SysBot",
+                f"El bot de WhatsApp detectó un límite de cuota excedido en las APIs de Google.\n\n"
+                f"Detalle del error:\n{e}\n\n"
+                f"Área afectada: {area}\n"
+                f"Contacto: {nombre} ({telefono})"
+            )
+        except Exception as mail_err:
+            logger.error("No se pudo enviar correo de alerta a infra (%s): %s", email_infra, mail_err)
+            
+    # 2. Escalar a humano si tenemos los datos
+    if telefono and nombre:
+        try:
+            escalar_a_humano(
+                telefono=telefono,
+                nombre=nombre,
+                resumen_caso=resumen or f"Fallo en servicio de Google (Cuota excedida). Motivo: {e}",
+                area=area
+            )
+        except Exception as esc_err:
+            logger.error("Fallo al auto-escalar por error de cuota: %s", esc_err)
+
+
 def agendar_cita(nombre: str, telefono: str, motivo: str, fecha: str, hora: str, area: str) -> dict:
     """Agenda una cita si el horario pedido está libre en el calendario de la primera
     persona disponible de esa área (según su rango horario propio). fecha: 'YYYY-MM-DD'.
@@ -379,7 +435,20 @@ def agendar_cita(nombre: str, telefono: str, motivo: str, fecha: str, hora: str,
             return existente
 
         for persona in personas:
-            libres = horarios_libres(fecha, persona.email, persona.hora_inicio, persona.hora_fin)
+            try:
+                libres = horarios_libres(fecha, persona.email, persona.hora_inicio, persona.hora_fin)
+            except Exception as e:
+                if _es_error_de_cuota_google(e):
+                    _manejar_error_cuota_google(
+                        e, area, telefono, nombre,
+                        resumen=f"Fallo al agendar cita de {motivo} para el {fecha} a las {hora}. Error de cuota de Google."
+                    )
+                    horario = _obtener_horario_atencion()
+                    return {
+                        "estado": "error_servicio",
+                        "mensaje": f"Servicio temporalmente inactivo, será contactado a la mayor brevedad en el horario de {horario}."
+                    }
+                raise
             # ponytail: horarios_libres() consulta el Calendar real vía freebusy, que no
             # lanza error ni refleja huecos si el service account no tiene acceso al
             # calendario (ver crear_evento_calendar) — _CITAS_DB es la fuente de verdad
@@ -399,6 +468,16 @@ def agendar_cita(nombre: str, telefono: str, motivo: str, fecha: str, hora: str,
                     evento = crear_evento_calendar(nombre, telefono, motivo, fecha, hora, persona.email, correo_cliente)
                     cita["calendar_link"] = evento.get("htmlLink")
                 except Exception as e:
+                    if _es_error_de_cuota_google(e):
+                        _manejar_error_cuota_google(
+                            e, area, telefono, nombre,
+                            resumen=f"Fallo al registrar cita de {motivo} en Calendar para el {fecha} a las {hora}. Error de cuota de Google."
+                        )
+                        horario = _obtener_horario_atencion()
+                        return {
+                            "estado": "error_servicio",
+                            "mensaje": f"Servicio temporalmente inactivo, será contactado a la mayor brevedad en el horario de {horario}."
+                        }
                     # ponytail: nunca dejar esto en silencio — sin log, una cita "exitosa" para
                     # el cliente puede no existir realmente en el calendario del agente.
                     logger.exception("crear_evento_calendar falló para cita_id=%s email=%s", cita_id, persona.email)
@@ -413,6 +492,16 @@ def agendar_cita(nombre: str, telefono: str, motivo: str, fecha: str, hora: str,
                         )
                         cita["email_enviado"] = True
                     except Exception as e:
+                        if _es_error_de_cuota_google(e):
+                            _manejar_error_cuota_google(
+                                e, area, telefono, nombre,
+                                resumen=f"Fallo al enviar correo de confirmación de cita a {correo_cliente}. Error de cuota de Google."
+                            )
+                            horario = _obtener_horario_atencion()
+                            return {
+                                "estado": "error_servicio",
+                                "mensaje": f"Servicio temporalmente inactivo, será contactado a la mayor brevedad en el horario de {horario}."
+                            }
                         logger.exception("enviar_email falló para cita_id=%s correo=%s", cita_id, correo_cliente)
                         cita["email_error"] = str(e)
                 try:
@@ -443,22 +532,123 @@ def consultar_disponibilidad_agenda(area: str) -> list[dict]:
     for d in dias:
         libres: set[str] = set()
         for persona in personas:
-            libres.update(horarios_libres(d, persona.email, persona.hora_inicio, persona.hora_fin))
+            try:
+                libres.update(horarios_libres(d, persona.email, persona.hora_inicio, persona.hora_fin))
+            except Exception as e:
+                if _es_error_de_cuota_google(e):
+                    # Obtener la conversación activa reciente para escalar
+                    telefono, nombre = None, None
+                    try:
+                        from .db import Conversacion, Contacto
+                        with SyncSession() as sess:
+                            conv = sess.query(Conversacion).filter(
+                                Conversacion.estado == "abierta"
+                            ).order_by(Conversacion.creado_en.desc()).first()
+                            if conv:
+                                telefono = conv.telefono
+                                contacto = sess.get(Contacto, telefono)
+                                nombre = contacto.nombre if contacto else telefono
+                    except Exception as db_err:
+                        logger.error("No se pudo obtener conversación reciente del DB: %s", db_err)
+                    
+                    _manejar_error_cuota_google(
+                        e, area, telefono, nombre,
+                        resumen="Fallo al consultar disponibilidad de agenda. Error de cuota de Google."
+                    )
+                    horario = _obtener_horario_atencion()
+                    return [{
+                        "estado": "error_servicio",
+                        "mensaje": f"Servicio temporalmente inactivo, será contactado a la mayor brevedad en el horario de {horario}."
+                    }]
+                raise
         resultado.append({"fecha": d, "horarios_libres": sorted(libres)})
     return resultado
 
 
 def crear_ticket_soporte(telefono: str, descripcion: str, modulo: str) -> dict:
-    try:
-        caso = espocrm.crear_caso(telefono, descripcion, modulo)
-        return {"ticket_id": caso.get("id"), "estado": "abierto"}
-    except httpx.HTTPError as e:
-        return {"estado": "error", "mensaje": f"CRM no disponible: {e}"}
+    from .db import Conversacion
+    with SyncSession() as session:
+        # 1. Obtener o crear area soporte
+        area_row = _get_area(session, "soporte")
+        
+        # 2. Obtener conversación activa para este teléfono
+        conv = session.query(Conversacion).filter(
+            Conversacion.telefono == telefono,
+            Conversacion.estado == "abierta"
+        ).order_by(Conversacion.id.desc()).first()
+        
+        # 3. Crear Radicado
+        codigo_rand = f"ESC-{str(uuid.uuid4())[:8].upper()}"
+        radicado = Radicado(
+            telefono=telefono,
+            area_id=area_row.id,
+            resumen=f"Soporte {modulo}: {descripcion}",
+            estado="escalado",
+            codigo=codigo_rand
+        )
+        session.add(radicado)
+        session.flush()
+        
+        if conv:
+            conv.radicado_id = radicado.id
+            
+        caso_id = radicado.codigo
+        
+        # 4. Crear caso en EspoCRM
+        crm_case_id = None
+        crm_case_number = None
+        try:
+            caso_crm = espocrm.crear_caso(telefono, f"[{caso_id}] {descripcion}", modulo)
+            crm_case_id = caso_crm.get("id")
+            crm_case_number = caso_crm.get("number")
+            radicado.crm_case_id = crm_case_id
+        except httpx.HTTPError as e:
+            logger.exception("espocrm.crear_caso falló en crear_ticket_soporte para caso_id=%s", caso_id)
+            
+        session.commit()
+        
+        if not crm_case_id:
+            return {
+                "ticket_id": caso_id,
+                "crm_case_number": None,
+                "estado": "abierto_local",
+                "mensaje": "Ticket registrado localmente. Sincronización con CRM pendiente."
+            }
+            
+        return {"ticket_id": caso_id, "crm_case_number": crm_case_number, "estado": "abierto"}
 
 
 def consultar_ticket_soporte(ticket_id: str) -> dict:
+    # Si el ticket_id es puramente numérico (ej: "20" o 20)
+    if str(ticket_id).isdigit():
+        try:
+            caso = espocrm.consultar_caso_por_numero(int(ticket_id))
+            if caso:
+                return caso
+            return {"error": "no encontrado", "mensaje": f"No existe ningún caso con número {ticket_id} en el CRM."}
+        except httpx.HTTPError as e:
+            return {"error": f"CRM no disponible: {e}"}
+
+    crm_id = ticket_id
+    
+    # Si parece un código de radicado ESC-XXXX
+    if ticket_id.startswith("ESC-"):
+        with SyncSession() as session:
+            radicado = session.query(Radicado).filter(Radicado.codigo == ticket_id).first()
+            if not radicado:
+                # Intentar buscar por ID si el código es ESC-<id>
+                try:
+                    radicado_id = int(ticket_id.removeprefix("ESC-"))
+                    radicado = session.get(Radicado, radicado_id)
+                except ValueError:
+                    pass
+            if radicado and radicado.crm_case_id:
+                crm_id = radicado.crm_case_id
+            else:
+                return {"error": "no encontrado", "mensaje": f"No se encontró ningún radicado con código {ticket_id} en la base de datos."}
+
     try:
-        return espocrm.consultar_caso(ticket_id)
+        return espocrm.consultar_caso(crm_id)
     except httpx.HTTPStatusError as e:
         if e.response.status_code == 404:
             return {"error": "no encontrado", "mensaje": f"No existe ningún ticket con ID {ticket_id}."}
@@ -556,9 +746,11 @@ def escalar_a_humano(telefono: str, nombre: str, resumen_caso: str, area: str) -
 
         cuerpo = f"Cliente: {nombre}\nTeléfono: {telefono}\nResumen: {resumen_caso}"
         try:
-            enviar_email(EMAIL_SOPORTE, f"[{caso_id}] Escalamiento SysBot - {nombre}", cuerpo)
+            enviar_email(EMAIL_SOPOPRTE if False else EMAIL_SOPORTE, f"[{caso_id}] Escalamiento SysBot - {nombre}", cuerpo)
             radicado.email_enviado = True
-        except Exception:
+        except Exception as e:
+            if _es_error_de_cuota_google(e):
+                _manejar_error_cuota_google(e, area, telefono, nombre, resumen=f"Fallo en envío de correo de soporte: {resumen_caso}")
             radicado.email_enviado = False
 
         agentes = _agentes_por_area(session, area)

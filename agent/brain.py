@@ -15,10 +15,9 @@ from .prometheus_metrics import demobot_errors_total
 
 logger = logging.getLogger(__name__)
 
-# FIX-REPAIR-002: Circuit breaker para Gemini
 def _fallback_generar_respuesta(*args, **kwargs) -> str:
     """Fallback cuando circuit breaker abre (Gemini caído)."""
-    return "Disculpa, no entendi tu mensaje. ¿Puedes reformular tu pregunta?"
+    return _get_fallback_message()
 
 # FIX-REPAIR-004: Timeout config from .env
 GEMINI_TIMEOUT_SECONDS = float(os.getenv('GEMINI_TIMEOUT_SECONDS', '10.0'))
@@ -105,14 +104,38 @@ def _tools_con_telefono(telefono: str) -> list:
 
 client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
-# ponytail: variedad fija para no sonar a bot roto si el LLM falla o calla.
-# Escalar a variantes por idioma/tono si el negocio lo pide más adelante.
-RESPUESTAS_FALLBACK = [
-    "Disculpa, se me cruzaron los cables un segundo 😅 ¿me repites eso último?",
-    "Uy, no logré procesar bien tu mensaje. ¿Puedes contarme de nuevo qué necesitas?",
-    "Perdona la demora, tuve un pequeño inconveniente técnico. ¿En qué te ayudo?",
-    "Se me fue el hilo por un momento, disculpa. ¿Me lo repites, por favor?",
-]
+def _get_fallback_message() -> str:
+    # Obtener el horario de atención desde la base de datos o usar default
+    horario = "Lunes a Viernes de 8am a 6pm"
+    try:
+        from .db import SyncSession, Parametro
+        with SyncSession() as session:
+            param = session.query(Parametro).filter(Parametro.clave == "horario_atencion").first()
+            if param and param.valor:
+                horario = param.valor
+    except Exception as e:
+        logger.error(f"Error al obtener horario_atencion de la base de datos: {e}")
+    
+    return f"Servicio temporalmente inactivo, será contactado a la mayor brevedad en el horario de {horario}."
+
+
+class FallbackDetector(list):
+    def __contains__(self, item):
+        if not isinstance(item, str):
+            return False
+        old_fallbacks = [
+            "Disculpa, se me cruzaron los cables un segundo 😅 ¿me repites eso último?",
+            "Uy, no logré procesar bien tu mensaje. ¿Puedes contarme de nuevo qué necesitas?",
+            "Perdona la demora, tuve un pequeño inconveniente técnico. ¿En qué te ayudo?",
+            "Se me fue el hilo por un momento, disculpa. ¿Me lo repites, por favor?",
+        ]
+        if item in old_fallbacks:
+            return True
+        if "Servicio temporalmente inactivo" in item:
+            return True
+        return False
+
+RESPUESTAS_FALLBACK = FallbackDetector()
 
 CONFIG_DIR = os.path.join(os.path.dirname(__file__), "..", "config")
 
@@ -214,7 +237,7 @@ async def generar_respuesta(
                     timeout=timeout_segundos
                 )
                 # Check if result is fallback string (from circuit breaker)
-                if isinstance(respuesta, str) and "Disculpa" in respuesta:
+                if isinstance(respuesta, str):
                     return respuesta
                 texto = respuesta.text
 
@@ -230,24 +253,52 @@ async def generar_respuesta(
             except asyncio.TimeoutError:
                 demobot_errors_total.labels(error_type="gemini_timeout").inc()
                 logger.warning("Timeout en Gemini para %s después de %.1fs", telefono, timeout_segundos)
-                return random.choice(RESPUESTAS_FALLBACK)
+                break
 
         except errors.ClientError as e:
             if e.code == 429 and intento == 0:
                 demobot_errors_total.labels(error_type="gemini_rate_limit").inc()
                 espera = _retry_delay_segundos(e)
-                logger.warning("429 de Gemini para %s, reintentando en %.1fs", telefono, espera)
-                await asyncio.sleep(espera)
-                continue
+                if espera <= 2.0:
+                    logger.warning("429 de Gemini para %s, reintentando en %.1fs", telefono, espera)
+                    await asyncio.sleep(espera)
+                    continue
+                else:
+                    logger.warning("429 de Gemini para %s: espera de %.1fs excede límite seguro de webhook. No se reintenta.", telefono, espera)
             demobot_errors_total.labels(error_type="gemini_client_error").inc()
-            logger.exception("Fallo generando respuesta para %s", telefono)
+            logger.error("Error de cliente Gemini para %s (código %s): %s", telefono, getattr(e, 'code', 'N/A'), e)
             break
-        except Exception:
+        except Exception as e:
             demobot_errors_total.labels(error_type="gemini_exception").inc()
-            logger.exception("Fallo generando respuesta para %s", telefono)
+            logger.error("Fallo inesperado generando respuesta para %s: %s", telefono, e)
             break
 
-    return texto if texto else random.choice(RESPUESTAS_FALLBACK)
+    if not texto:
+        # Auto-escalar a humano en caso de caída del servicio/IA
+        nombre = telefono
+        try:
+            from .db import SyncSession, Contacto
+            with SyncSession() as session:
+                contacto = session.get(Contacto, telefono)
+                if contacto and contacto.nombre:
+                    nombre = contacto.nombre
+        except Exception as db_err:
+            logger.error("No se pudo consultar el nombre del contacto en DB para auto-escalar: %s", db_err)
+
+        try:
+            from . import tools
+            tools.escalar_a_humano(
+                telefono=telefono,
+                nombre=nombre,
+                resumen_caso="Fallo en el servicio conversacional (Gemini API fuera de servicio, timeout o límite de cuota).",
+                area="soporte"
+            )
+        except Exception as esc_err:
+            logger.error("Fallo al auto-escalar conversación tras error de Gemini: %s", esc_err)
+
+        texto = _get_fallback_message()
+
+    return texto
 
 
 async def clasificar_intencion(texto: str) -> str:
