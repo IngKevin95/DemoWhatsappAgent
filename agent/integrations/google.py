@@ -14,7 +14,6 @@ logger = setup_structured_logging()
 SCOPES = ["https://www.googleapis.com/auth/calendar", "https://www.googleapis.com/auth/gmail.send"]
 TOKEN_PATH = os.path.join(os.path.dirname(__file__), "..", "..", "token.json")
 CALENDAR_ID = os.getenv("GOOGLE_CALENDAR_ID", "primary")
-HORARIOS_DISPONIBLES = ["09:00", "10:30", "14:00", "16:00"]
 TZ_OFFSET = "-05:00"  # America/Bogota, sin DST
 
 
@@ -62,7 +61,7 @@ def crear_evento_calendar(
 
 
 def horarios_libres(fecha: str, calendar_id: str = CALENDAR_ID, hora_inicio: str = "09:00", hora_fin: str = "18:00") -> list[str]:
-    """Franjas de HORARIOS_DISPONIBLES (dentro de [hora_inicio, hora_fin)) sin choque
+    """Franjas disponibles de 1 hora (dentro de [hora_inicio, hora_fin)) sin choque
     con eventos reales del calendario calendar_id ese día."""
     inicio_dia = datetime.strptime(fecha, "%Y-%m-%d")
     fin_dia = inicio_dia + timedelta(days=1)
@@ -77,13 +76,21 @@ def horarios_libres(fecha: str, calendar_id: str = CALENDAR_ID, hora_inicio: str
         for b in resp["calendars"][calendar_id]["busy"]
     ]
     libres = []
-    for h in HORARIOS_DISPONIBLES:
-        if not (hora_inicio <= h < hora_fin):
-            continue
-        inicio = datetime.strptime(f"{fecha} {h}", "%Y-%m-%d %H:%M")
-        fin = inicio + timedelta(hours=1)
-        if not any(inicio < b_fin and fin > b_inicio for b_inicio, b_fin in ocupados):
-            libres.append(h)
+    try:
+        current_time = datetime.strptime(f"{fecha} {hora_inicio}", "%Y-%m-%d %H:%M")
+        end_time = datetime.strptime(f"{fecha} {hora_fin}", "%Y-%m-%d %H:%M")
+    except ValueError:
+        current_time = datetime.strptime(f"{fecha} 09:00", "%Y-%m-%d %H:%M")
+        end_time = datetime.strptime(f"{fecha} 18:00", "%Y-%m-%d %H:%M")
+
+    while current_time < end_time:
+        fin = current_time + timedelta(hours=1)
+        if fin > end_time:
+            break
+        if not any(current_time < b_fin and fin > b_inicio for b_inicio, b_fin in ocupados):
+            libres.append(current_time.strftime("%H:%M"))
+        current_time += timedelta(hours=1)
+        
     return libres
 
 
