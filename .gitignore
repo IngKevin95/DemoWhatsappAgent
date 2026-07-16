@@ -51,3 +51,4 @@ package.json
 # ── factory-build-harness (auto) ───────────────────────
 .claude/state/build-state.json
 # ── /factory-build-harness ──────────────────────
+cloudflared.err.log
