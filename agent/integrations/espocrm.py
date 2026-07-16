@@ -134,6 +134,14 @@ def consultar_caso(caso_id: str) -> dict:
     return r.json()
 
 
+def consultar_caso_por_numero(numero: int) -> dict | None:
+    params = {"where[0][type]": "equals", "where[0][attribute]": "number", "where[0][value]": numero}
+    r = httpx.get(f"{BASE_URL}/api/v1/Case", params=params, headers=_headers(), timeout=TIMEOUT)
+    r.raise_for_status()
+    lista = r.json().get("list", [])
+    return lista[0] if lista else None
+
+
 def comentar_caso(caso_id: str, texto: str) -> dict:
     body = {"type": "Post", "parentType": "Case", "parentId": caso_id, "post": texto}
     r = httpx.post(f"{BASE_URL}/api/v1/Note", json=body, headers=_headers(), timeout=TIMEOUT)
