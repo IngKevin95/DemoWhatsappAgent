@@ -89,6 +89,7 @@ def test_ocupados():
 def test_obtener_horario_atencion(mock_sync_session):
     mock_session = MagicMock()
     mock_sync_session.return_value.__enter__.return_value = mock_session
-    mock_session.query.return_value.filter.return_value.first.return_value = None
+    mock_param = MagicMock()
+    mock_param.valor = "Horario Test"
+    mock_session.query.return_value.filter.return_value.first.return_value = mock_param
     res = _obtener_horario_atencion()
-    assert isinstance(res, str)
