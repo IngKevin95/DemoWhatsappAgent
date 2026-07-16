@@ -410,7 +410,7 @@ def _manejar_error_cuota_google(e: Exception, area: str, telefono: str | None = 
 def agendar_cita(nombre: str, telefono: str, motivo: str, fecha: str, hora: str, area: str) -> dict:
     """Agenda una cita si el horario pedido está libre en el calendario de la primera
     persona disponible de esa área (según su rango horario propio). fecha: 'YYYY-MM-DD'.
-    hora: 'HH:MM', debe ser una de HORARIOS_DISPONIBLES (09:00, 10:30, 14:00, 16:00).
+    hora: 'HH:MM'.
     area: p.ej. 'comercial' o 'soporte'. Si nadie de esa área está libre, devuelve
     alternativas libres ese mismo día (unión de todas las personas del área)."""
     with SyncSession() as session:
