@@ -18,7 +18,7 @@ import httpx
 
 from .db import Agente, Area, Cliente, Contacto, Modulo, Oferta, Parametro, Radicado, SyncSession, Combo
 from .integrations import espocrm
-from .integrations.google import crear_evento_calendar, enviar_email, horarios_libres
+from .integrations.google import CALENDAR_ID, crear_evento_calendar, enviar_email, horarios_libres
 
 logger = logging.getLogger(__name__)
 
@@ -542,20 +542,37 @@ def agendar_cita(nombre: str, telefono: str, motivo: str, fecha: str, hora: str,
                     "area": area, "atendido_por": persona.nombre, "atendido_email": persona.email,
                 }
                 _CITAS_DB.append(cita)
-                # el evento se crea en el calendario autenticado (CALENDAR_ID='primary',
-                # la cuenta OAuth); el agente y los correos del cliente van como invitados.
-                invitados = [persona.email] + correos_cliente if _validar_correo(persona.email) else list(correos_cliente)
-                cita["invitados"] = invitados
                 try:
-                    evento = crear_evento_calendar(nombre, telefono, motivo, fecha, hora, correos_invitados=invitados)
+                    # Consistencia: el evento se crea en el MISMO calendario que se consultó
+                    # para disponibilidad (el del agente). Así queda visible en su freebusy y
+                    # no se puede doble-agendar. El cliente va como invitado.
+                    evento = crear_evento_calendar(
+                        nombre, telefono, motivo, fecha, hora,
+                        calendar_id=persona.email, correos_invitados=correos_cliente,
+                    )
                     cita["calendar_link"] = evento.get("htmlLink")
+                    cita["calendar_id"] = persona.email
+                    cita["invitados"] = list(correos_cliente)
                 except Exception as e:
-                    # Degradado: la cita ya quedó registrada en _CITAS_DB; no se pudo
-                    # crear el evento en Google Calendar. Se alerta a infra y se sigue
-                    # (el cliente igual queda agendado con la franja de BD).
+                    # El calendario del agente no es accesible (mal configurado / sin
+                    # compartir). Se alerta a infra y se cae al calendario autenticado
+                    # (CALENDAR_ID), con el agente ahora como invitado.
                     _alertar_infra_fallo_google(e, area, telefono, nombre)
-                    cita["calendar_error"] = str(e)
-                    cita["calendar_degradado"] = True
+                    invitados_fb = ([persona.email] if _validar_correo(persona.email) else []) + correos_cliente
+                    try:
+                        evento = crear_evento_calendar(
+                            nombre, telefono, motivo, fecha, hora,
+                            calendar_id=CALENDAR_ID, correos_invitados=invitados_fb,
+                        )
+                        cita["calendar_link"] = evento.get("htmlLink")
+                        cita["calendar_id"] = CALENDAR_ID
+                        cita["invitados"] = invitados_fb
+                        cita["calendar_fallback_primary"] = True
+                    except Exception as e2:
+                        # Ni el calendario del agente ni el autenticado: la cita ya está
+                        # registrada en _CITAS_DB; se sigue sin evento en Calendar.
+                        cita["calendar_error"] = str(e2)
+                        cita["calendar_degradado"] = True
                 if correos_cliente:
                     try:
                         for correo_dest in correos_cliente:

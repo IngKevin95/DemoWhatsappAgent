@@ -15,6 +15,7 @@ from agent.tools import (
     _franjas_bd,
     _validar_correo,
     _CITAS_DB,
+    CALENDAR_ID,
 )
 
 
@@ -168,8 +169,9 @@ class TestValidacionYCorreoInvitado:
         assert resultado["estado"] == "guardado"
         assert contacto.correo == "juan@empresa.com"
 
-    def test_correo_valido_del_cliente_se_pasa_como_invitado(self):
-        """El correo válido del cliente llega a crear_evento_calendar como invitado."""
+    def test_evento_en_calendario_del_agente_cliente_invitado(self):
+        """Path normal (calendario del agente accesible): el evento se crea en el
+        calendario del agente y el cliente va como invitado."""
         _CITAS_DB.clear()
         persona = MagicMock(email="a@x.com", hora_inicio="09:00", hora_fin="18:00", nombre="Agente 1")
         session = _param_session({})
@@ -180,15 +182,16 @@ class TestValidacionYCorreoInvitado:
              patch("agent.tools.crear_evento_calendar", return_value={"htmlLink": "http://cal/x"}) as mock_evt, \
              patch("agent.tools.enviar_email"), \
              patch("agent.tools.espocrm"):
-            agendar_cita(
+            resultado = agendar_cita(
                 nombre="Juan", telefono="3000000000", motivo="Consultoria",
                 fecha="2026-08-01", hora="10:00", area="comercial",
             )
-        # crear_evento_calendar recibe la lista de invitados (agente + cliente)
-        assert mock_evt.called
+        # evento creado en el calendario del agente (consistencia con la disponibilidad)
+        assert mock_evt.call_args.kwargs["calendar_id"] == "a@x.com"
         invitados = mock_evt.call_args.kwargs["correos_invitados"]
-        assert "cliente@valido.com" in invitados
-        assert "a@x.com" in invitados, "el agente (dueño del calendario) también queda invitado"
+        assert invitados == ["cliente@valido.com"], "el cliente es invitado; el agente es dueño del calendario"
+        assert resultado["calendar_id"] == "a@x.com"
+        assert not resultado.get("calendar_fallback_primary")
         _CITAS_DB.clear()
 
     def test_correo_invalido_del_cliente_no_se_pasa_como_invitado(self):
@@ -206,10 +209,8 @@ class TestValidacionYCorreoInvitado:
                 nombre="Juan", telefono="3000000000", motivo="Consultoria",
                 fecha="2026-08-01", hora="10:00", area="comercial",
             )
-        assert mock_evt.called
         invitados = mock_evt.call_args.kwargs["correos_invitados"]
-        assert "cliente-invalido" not in invitados
-        assert invitados == ["a@x.com"], "solo el agente; el correo inválido del cliente se descarta"
+        assert invitados == [], "el correo inválido del cliente se descarta"
         _CITAS_DB.clear()
 
     def test_multiples_correos_cliente_todos_quedan_invitados(self):
@@ -229,12 +230,56 @@ class TestValidacionYCorreoInvitado:
                 fecha="2026-08-01", hora="10:00", area="comercial",
             )
         invitados = mock_evt.call_args.kwargs["correos_invitados"]
-        assert invitados == ["a@x.com", "uno@c.com", "dos@c.com"], "agente + los 2 correos válidos, 'malo' descartado"
+        assert invitados == ["uno@c.com", "dos@c.com"], "los 2 correos válidos del cliente, 'malo' descartado"
         assert resultado["invitados"] == invitados
         # confirmación enviada a cada correo válido del cliente (no al 'malo')
         destinatarios = {c.args[0] for c in mock_mail.call_args_list}
         assert destinatarios == {"uno@c.com", "dos@c.com"}
         _CITAS_DB.clear()
+
+    def test_fallback_a_primary_cuando_calendario_agente_inaccesible(self):
+        """Si el calendario del agente falla (404), se cae al calendario autenticado
+        con el agente como invitado, y se alerta a infra."""
+        _CITAS_DB.clear()
+        persona = MagicMock(email="a@x.com", hora_inicio="09:00", hora_fin="18:00", nombre="Agente 1")
+        session = _param_session({})
+        session.get = MagicMock(return_value=MagicMock(correo="cliente@valido.com"))
+        # 1ª llamada (calendario del agente) lanza; 2ª (primary) funciona
+        with patch("agent.tools._agentes_por_area", return_value=[persona]), \
+             patch("agent.tools.SyncSession", return_value=session), \
+             patch("agent.tools.horarios_libres", return_value=["10:00"]), \
+             patch("agent.tools.crear_evento_calendar",
+                   side_effect=[Exception("HttpError 404"), {"htmlLink": "http://cal/primary"}]) as mock_evt, \
+             patch("agent.tools.enviar_email"), \
+             patch("agent.tools.espocrm"), \
+             patch("agent.tools._alertar_infra_fallo_google") as mock_alertar:
+            resultado = agendar_cita(
+                nombre="Juan", telefono="3000000000", motivo="Consultoria",
+                fecha="2026-08-01", hora="10:00", area="comercial",
+            )
+        assert mock_alertar.called, "el agente sin calendario accesible es una config a corregir -> alerta infra"
+        assert resultado.get("calendar_fallback_primary") is True
+        assert resultado["calendar_id"] == CALENDAR_ID
+        # en el fallback el agente pasa a ser invitado, junto con el cliente
+        invitados_fb = mock_evt.call_args_list[1].kwargs["correos_invitados"]
+        assert invitados_fb == ["a@x.com", "cliente@valido.com"]
+        assert resultado.get("calendar_degradado") is not True
+        _CITAS_DB.clear()
+
+    def test_doble_validacion_franja_tabla_interseca_ocupados_google(self):
+        """La disponibilidad respeta a la vez la franja de la tabla (hora_inicio/fin)
+        y los ocupados reales del calendario de Google."""
+        from agent.integrations import google as g
+        svc = MagicMock()
+        svc.freebusy.return_value.query.return_value.execute.return_value = {
+            "calendars": {"a@x.com": {"busy": [
+                {"start": "2026-07-21T10:00:00", "end": "2026-07-21T11:00:00"},
+            ]}}
+        }
+        with patch("agent.integrations.google.get_calendar_service", return_value=svc):
+            libres = g.horarios_libres("2026-07-21", "a@x.com", "09:00", "12:00")
+        # franja tabla 09-12 -> 09,10,11 ; Google ocupa 10-11 -> quedan 09 y 11
+        assert libres == ["09:00", "11:00"]
 
     def test_guardar_multiples_correos_separa_validos_de_invalidos(self):
         """HU-061: guardar_datos_contacto persiste los válidos y reporta los inválidos."""
