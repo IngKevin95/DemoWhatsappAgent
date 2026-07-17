@@ -59,6 +59,17 @@ def _validar_correo(correo: str | None) -> bool:
     return bool(correo and isinstance(correo, str) and _EMAIL_RE.match(correo.strip()))
 
 
+def _separar_correos(correo_raw: str | None) -> tuple[list[str], list[str]]:
+    """Separa una cadena con uno o varios correos (coma/;/espacio) en (válidos, inválidos),
+    conservando el orden y sin duplicados en los válidos."""
+    if not isinstance(correo_raw, str):
+        return [], []
+    partes = [c.strip() for c in re.split(r"[,;\s]+", correo_raw) if c.strip()]
+    validos = list(dict.fromkeys(c for c in partes if _validar_correo(c)))
+    invalidos = [c for c in partes if not _validar_correo(c)]
+    return validos, invalidos
+
+
 def _franjas_bd(hora_inicio: str, hora_fin: str) -> list[str]:
     """Franjas de 1h en [hora_inicio, hora_fin) según la ventana horaria del agente
     en la BD. Respaldo cuando el Calendar real no se puede consultar."""
@@ -368,26 +379,28 @@ def guardar_datos_contacto(
 ) -> dict:
     """Guarda/actualiza los datos básicos de quien escribe (nombre, empresa, correo, ciudad).
     Llamar apenas el usuario los dé, típicamente al inicio de la conversación."""
-    correo_invalido = correo is not None and not _validar_correo(correo)
+    validos, invalidos = _separar_correos(correo) if correo is not None else ([], [])
     with SyncSession() as session:
         contacto = _upsert_contacto(session, telefono, nombre)
-        # solo se persiste el correo si tiene formato válido; uno mal formado no se
-        # guarda (rompería la invitación de Calendar) y se pide corrección al cliente.
-        if correo is not None and not correo_invalido:
-            contacto.correo = correo.strip()
+        # se persisten solo los correos con formato válido (separados por coma); los mal
+        # formados no se guardan (romperían la invitación de Calendar) y se piden de nuevo.
+        if validos:
+            contacto.correo = ",".join(validos)
         if ciudad is not None:
             contacto.ciudad = ciudad
         if empresa is not None:
             # empresa es dato de cliente/lead, no de contacto -> clientes.nombre_empresa
             _upsert_cliente(session, telefono, tipo="lead", nombre_empresa=empresa)
         session.commit()
-    if correo_invalido:
+    if invalidos:
         return {
             "telefono": telefono,
             "estado": "correo_invalido",
-            "mensaje": f"El correo '{correo}' no tiene un formato válido. Pídele al cliente que lo confirme.",
+            "guardados": validos,
+            "invalidos": invalidos,
+            "mensaje": f"Estos correos no tienen formato válido: {', '.join(invalidos)}. Pídele al cliente que los confirme.",
         }
-    return {"telefono": telefono, "estado": "guardado"}
+    return {"telefono": telefono, "estado": "guardado", "guardados": validos}
 
 
 def _obtener_horario_atencion() -> str:
@@ -479,10 +492,11 @@ def agendar_cita(nombre: str, telefono: str, motivo: str, fecha: str, hora: str,
         personas = _agentes_por_area(session, area)
         contacto = session.get(Contacto, telefono)
         correo_cliente = contacto.correo if contacto else None
-    # un correo mal formado no se usa como invitado: Google rechazaría el evento entero.
-    if correo_cliente and not _validar_correo(correo_cliente):
-        logger.warning("Correo de cliente inválido (%s); no se agrega como invitado ni se envía confirmación.", correo_cliente)
-        correo_cliente = None
+    # el/los correos del cliente pueden venir separados por coma; solo los de formato
+    # válido se usan como invitados (Google rechaza el evento si un attendee es inválido).
+    correos_cliente, correos_invalidos = _separar_correos(correo_cliente)
+    if correos_invalidos:
+        logger.warning("Correos de cliente inválidos, no se invitan: %s", correos_invalidos)
     if not personas:
         return {"disponible": False, "mensaje": f"No hay nadie configurado para el área '{area}'."}
 
@@ -528,8 +542,11 @@ def agendar_cita(nombre: str, telefono: str, motivo: str, fecha: str, hora: str,
                     "area": area, "atendido_por": persona.nombre, "atendido_email": persona.email,
                 }
                 _CITAS_DB.append(cita)
+                # invitados = agente (dueño del calendario) + correos válidos del cliente.
+                invitados = [persona.email] + correos_cliente if _validar_correo(persona.email) else list(correos_cliente)
+                cita["invitados"] = invitados
                 try:
-                    evento = crear_evento_calendar(nombre, telefono, motivo, fecha, hora, persona.email, correo_cliente)
+                    evento = crear_evento_calendar(nombre, telefono, motivo, fecha, hora, persona.email, invitados)
                     cita["calendar_link"] = evento.get("htmlLink")
                 except Exception as e:
                     # Degradado: la cita ya quedó registrada en _CITAS_DB; no se pudo
@@ -538,14 +555,15 @@ def agendar_cita(nombre: str, telefono: str, motivo: str, fecha: str, hora: str,
                     _alertar_infra_fallo_google(e, area, telefono, nombre)
                     cita["calendar_error"] = str(e)
                     cita["calendar_degradado"] = True
-                if correo_cliente:
+                if correos_cliente:
                     try:
-                        enviar_email(
-                            correo_cliente,
-                            f"Confirmación de cita SysPlus - {fecha} {hora}",
-                            f"Hola {nombre},\n\nTu cita quedó registrada:\nMotivo: {motivo}\n"
-                            f"Fecha: {fecha}\nHora: {hora}\nTe atenderá: {persona.nombre} ({area}).\n\nSaludos, SysPlus.",
-                        )
+                        for correo_dest in correos_cliente:
+                            enviar_email(
+                                correo_dest,
+                                f"Confirmación de cita SysPlus - {fecha} {hora}",
+                                f"Hola {nombre},\n\nTu cita quedó registrada:\nMotivo: {motivo}\n"
+                                f"Fecha: {fecha}\nHora: {hora}\nTe atenderá: {persona.nombre} ({area}).\n\nSaludos, SysPlus.",
+                            )
                         cita["email_enviado"] = True
                     except Exception as e:
                         # Degradado: la cita ya está registrada; el correo de

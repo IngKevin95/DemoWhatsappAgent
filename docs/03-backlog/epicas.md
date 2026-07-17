@@ -752,6 +752,7 @@ Garantizar que ningún fallo de servicios externos (Google/Calendar) se pierda s
 - HU-058: Notificación WhatsApp al líder de infraestructura ante fallo técnico.
 - HU-059: Notificación WhatsApp al líder comercial del área cuando un caso entra en cola.
 - HU-060: Validación de correo del cliente e inclusión como invitado en la cita.
+- HU-061: Agente y múltiples correos del cliente como invitados en la cita.
 
 ### Layer
 

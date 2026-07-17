@@ -184,9 +184,11 @@ class TestValidacionYCorreoInvitado:
                 nombre="Juan", telefono="3000000000", motivo="Consultoria",
                 fecha="2026-08-01", hora="10:00", area="comercial",
             )
-        # crear_evento_calendar recibe el correo del cliente como último arg (invitado)
+        # crear_evento_calendar recibe la lista de invitados (agente + cliente)
         assert mock_evt.called
-        assert "cliente@valido.com" in mock_evt.call_args.args
+        invitados = mock_evt.call_args.args[-1]
+        assert "cliente@valido.com" in invitados
+        assert "a@x.com" in invitados, "el agente (dueño del calendario) también queda invitado"
         _CITAS_DB.clear()
 
     def test_correo_invalido_del_cliente_no_se_pasa_como_invitado(self):
@@ -205,9 +207,48 @@ class TestValidacionYCorreoInvitado:
                 fecha="2026-08-01", hora="10:00", area="comercial",
             )
         assert mock_evt.called
-        assert "cliente-invalido" not in mock_evt.call_args.args
-        assert None in mock_evt.call_args.args  # correo_cliente saneado a None
+        invitados = mock_evt.call_args.args[-1]
+        assert "cliente-invalido" not in invitados
+        assert invitados == ["a@x.com"], "solo el agente; el correo inválido del cliente se descarta"
         _CITAS_DB.clear()
+
+    def test_multiples_correos_cliente_todos_quedan_invitados(self):
+        """HU-061: varios correos del cliente (coma) -> todos los válidos como invitados."""
+        _CITAS_DB.clear()
+        persona = MagicMock(email="a@x.com", hora_inicio="09:00", hora_fin="18:00", nombre="Agente 1")
+        session = _param_session({})
+        session.get = MagicMock(return_value=MagicMock(correo="uno@c.com, dos@c.com , malo"))
+        with patch("agent.tools._agentes_por_area", return_value=[persona]), \
+             patch("agent.tools.SyncSession", return_value=session), \
+             patch("agent.tools.horarios_libres", return_value=["10:00"]), \
+             patch("agent.tools.crear_evento_calendar", return_value={"htmlLink": "http://cal/x"}) as mock_evt, \
+             patch("agent.tools.enviar_email") as mock_mail, \
+             patch("agent.tools.espocrm"):
+            resultado = agendar_cita(
+                nombre="Juan", telefono="3000000000", motivo="Consultoria",
+                fecha="2026-08-01", hora="10:00", area="comercial",
+            )
+        invitados = mock_evt.call_args.args[-1]
+        assert invitados == ["a@x.com", "uno@c.com", "dos@c.com"], "agente + los 2 correos válidos, 'malo' descartado"
+        assert resultado["invitados"] == invitados
+        # confirmación enviada a cada correo válido del cliente (no al 'malo')
+        destinatarios = {c.args[0] for c in mock_mail.call_args_list}
+        assert destinatarios == {"uno@c.com", "dos@c.com"}
+        _CITAS_DB.clear()
+
+    def test_guardar_multiples_correos_separa_validos_de_invalidos(self):
+        """HU-061: guardar_datos_contacto persiste los válidos y reporta los inválidos."""
+        contacto = MagicMock()
+        with patch("agent.tools.SyncSession", return_value=_param_session({})), \
+             patch("agent.tools._upsert_contacto", return_value=contacto), \
+             patch("agent.tools._upsert_cliente"):
+            resultado = guardar_datos_contacto(
+                telefono="3000000000", nombre="Juan", correo="ok@c.com, malo, otro@c.com",
+            )
+        assert resultado["estado"] == "correo_invalido"
+        assert resultado["guardados"] == ["ok@c.com", "otro@c.com"]
+        assert resultado["invalidos"] == ["malo"]
+        assert contacto.correo == "ok@c.com,otro@c.com"
 
 
 class TestNotificacionLiderInfra:
