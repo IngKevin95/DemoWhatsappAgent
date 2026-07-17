@@ -720,3 +720,38 @@ Sincronizar de forma profunda el bot con herramientas empresariales más robusta
 ### Layer
 
 **business** — Operaciones empresariales.
+
+---
+
+## EP-015: Resiliencia de Escalamiento y Notificaciones a Líderes
+
+### Propósito Ejecutivo
+
+Garantizar que ningún fallo de servicios externos (Google/Calendar) se pierda silenciosamente y que los escalamientos lleguen a la persona correcta: al líder de infraestructura ante fallos técnicos, y al líder comercial del área cuando la cola se satura.
+
+### Por Qué Existe
+
+- **Bug detectado en producción:** un `RefreshError` de Google Calendar (token revocado) no era error de cuota, así que el `except` de las tools de Calendar lo dejaba escapar sin loggear ni escalar. El cliente recibía un mensaje de "inconveniente técnico" improvisado por el LLM y no había rastro en logs.
+- **Punto ciego operativo:** solo los fallos de cuota alertaban a infra; cualquier otro fallo de Google era invisible.
+- **Escalamiento sin dueño:** cuando todos los agentes de un área están ocupados, el caso queda en cola sin que ningún líder se entere para intervenir.
+
+### Objetivos PRD que Atiende
+
+- ✅ Escalamiento confiable a humano (loop cerrado, sin casos perdidos).
+- ✅ Observabilidad operativa de fallos de integración.
+
+### Capabilities Incluidas
+
+- Manejo genérico de fallos de Google/Calendar (no solo cuota): log estructurado + escalamiento + alerta a infra.
+- Parámetro configurable `whatsapp_lider_infra` para notificación por WhatsApp ante fallo técnico.
+- Parámetro configurable `whatsapp_lider_<area>` para notificación por WhatsApp al líder comercial cuando un caso entra en cola.
+
+### Historias
+
+- HU-057: Manejo robusto y observable de fallos de Google/Calendar (no solo cuota).
+- HU-058: Notificación WhatsApp al líder de infraestructura ante fallo técnico.
+- HU-059: Notificación WhatsApp al líder comercial del área cuando un caso entra en cola.
+
+### Layer
+
+**foundational** — Resiliencia y observabilidad del núcleo de escalamiento; habilita confiabilidad para las épicas de negocio.

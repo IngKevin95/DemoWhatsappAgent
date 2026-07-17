@@ -31,6 +31,9 @@ PARAMETROS = {
     "correo_soporte": ("soporte@sysplus.com", "Correo general de soporte"),
     "correo_proveedores": ("proveedores@sysplus.com", "Correo general para proveedores"),
     "timeout_pausa_minutos": ("60", "Minutos de inactividad tras los cuales una pausa (opción B) se cierra sola"),
+    "whatsapp_lider_infra": ("", "Número WhatsApp del líder de infraestructura, alertado ante fallos técnicos de Google/Calendar (EP-015)"),
+    "whatsapp_lider_comercial": ("", "Número WhatsApp del líder comercial, notificado cuando un caso del área comercial entra en cola (EP-015)"),
+    "whatsapp_lider_soporte": ("", "Número WhatsApp del líder de soporte, notificado cuando un caso del área soporte entra en cola (EP-015)"),
 }
 
 COMBOS = [
@@ -83,15 +86,20 @@ if __name__ == "__main__":
         else:
             print("Tabla combos ya tiene datos, no se siembra.")
 
-        if session.query(Parametro).count() == 0:
+        # ponytail: por-clave (no all-or-nothing) para que agregar un parámetro nuevo al
+        # dict PARAMETROS (ej. whatsapp_lider_infra en EP-015) también llegue a entornos
+        # donde la tabla ya tenía datos sembrados de antes.
+        claves_existentes = {p.clave for p in session.query(Parametro).all()}
+        faltantes = {k: v for k, v in PARAMETROS.items() if k not in claves_existentes}
+        if faltantes:
             session.add_all(
                 Parametro(clave=clave, valor=valor, descripcion=desc)
-                for clave, (valor, desc) in PARAMETROS.items()
+                for clave, (valor, desc) in faltantes.items()
             )
             session.commit()
-            print(f"Sembrados {len(PARAMETROS)} parámetros.")
+            print(f"Sembrados {len(faltantes)} parámetros nuevos: {', '.join(faltantes)}.")
         else:
-            print("Tabla parametros ya tiene datos, no se siembra.")
+            print("Tabla parametros ya tiene todos los parámetros conocidos, no se siembra.")
 
         if session.query(Agente).count() == 0:
             nombres_area = {a["area"] for a in AGENTES}
