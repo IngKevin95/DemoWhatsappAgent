@@ -36,7 +36,7 @@ def get_gmail_service():
 
 def crear_evento_calendar(
     nombre: str, telefono: str, motivo: str, fecha: str, hora: str,
-    calendar_id: str = CALENDAR_ID, correo_cliente: str | None = None,
+    calendar_id: str = CALENDAR_ID, correos_invitados: list[str] | None = None,
 ) -> dict:
     try:
         inicio_dt = datetime.strptime(f"{fecha} {hora}", "%Y-%m-%d %H:%M")
@@ -48,8 +48,11 @@ def crear_evento_calendar(
             "end": {"dateTime": fin_dt.isoformat(), "timeZone": "America/Bogota"},
         }
         send_updates = "none"
-        if correo_cliente:
-            evento["attendees"] = [{"email": correo_cliente}]
+        # invitados: normalmente el agente (dueño del calendario) + el/los correos del
+        # cliente. Se deduplican conservando el orden.
+        invitados = list(dict.fromkeys(c for c in (correos_invitados or []) if c))
+        if invitados:
+            evento["attendees"] = [{"email": c} for c in invitados]
             send_updates = "all"
         return get_calendar_service().events().insert(
             calendarId=calendar_id, body=evento, sendUpdates=send_updates

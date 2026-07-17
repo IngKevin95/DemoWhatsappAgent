@@ -6,6 +6,7 @@ consultan Firebird directamente. Ambos viven en infra de demo separada
 
 import logging
 import os
+import re
 import threading
 import unicodedata
 import uuid
@@ -17,7 +18,7 @@ import httpx
 
 from .db import Agente, Area, Cliente, Contacto, Modulo, Oferta, Parametro, Radicado, SyncSession, Combo
 from .integrations import espocrm
-from .integrations.google import crear_evento_calendar, enviar_email, horarios_libres
+from .integrations.google import CALENDAR_ID, crear_evento_calendar, enviar_email, horarios_libres
 
 logger = logging.getLogger(__name__)
 
@@ -38,11 +39,51 @@ _META_API_URL = f"https://graph.facebook.com/v20.0/{_META_PHONE_ID}/messages"
 
 
 def _enviar_whatsapp_directo(telefono: str, texto: str) -> None:
-    httpx.post(
+    resp = httpx.post(
         _META_API_URL,
         headers={"Authorization": f"Bearer {_META_TOKEN}", "Content-Type": "application/json"},
         json={"messaging_product": "whatsapp", "to": telefono, "type": "text", "text": {"body": texto}},
     )
+    # Meta devuelve 200 aunque el número no esté en la lista de destinatarios
+    # permitidos o esté fuera de la ventana de 24h: sin este chequeo el fallo era
+    # invisible (por eso "el correo llegó pero el WhatsApp no").
+    if resp.status_code >= 400:
+        raise RuntimeError(f"Meta rechazó el WhatsApp a {telefono}: {resp.status_code} {resp.text[:200]}")
+
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _validar_correo(correo: str | None) -> bool:
+    """Valida el formato básico de un correo (algo@algo.tld). No verifica que exista."""
+    return bool(correo and isinstance(correo, str) and _EMAIL_RE.match(correo.strip()))
+
+
+def _separar_correos(correo_raw: str | None) -> tuple[list[str], list[str]]:
+    """Separa una cadena con uno o varios correos (coma/;/espacio) en (válidos, inválidos),
+    conservando el orden y sin duplicados en los válidos."""
+    if not isinstance(correo_raw, str):
+        return [], []
+    partes = [c.strip() for c in re.split(r"[,;\s]+", correo_raw) if c.strip()]
+    validos = list(dict.fromkeys(c for c in partes if _validar_correo(c)))
+    invalidos = [c for c in partes if not _validar_correo(c)]
+    return validos, invalidos
+
+
+def _franjas_bd(hora_inicio: str, hora_fin: str) -> list[str]:
+    """Franjas de 1h en [hora_inicio, hora_fin) según la ventana horaria del agente
+    en la BD. Respaldo cuando el Calendar real no se puede consultar."""
+    try:
+        h = datetime.strptime(hora_inicio, "%H:%M")
+        fin = datetime.strptime(hora_fin, "%H:%M")
+    except (ValueError, TypeError):
+        h = datetime.strptime("09:00", "%H:%M")
+        fin = datetime.strptime("18:00", "%H:%M")
+    out = []
+    while h + timedelta(hours=1) <= fin:
+        out.append(h.strftime("%H:%M"))
+        h += timedelta(hours=1)
+    return out
 
 _CITAS_DB: list[dict] = []
 _CITAS_LOCK = threading.Lock()  # ponytail: evita doble-agendar el mismo cupo entre threads concurrentes
@@ -338,17 +379,28 @@ def guardar_datos_contacto(
 ) -> dict:
     """Guarda/actualiza los datos básicos de quien escribe (nombre, empresa, correo, ciudad).
     Llamar apenas el usuario los dé, típicamente al inicio de la conversación."""
+    validos, invalidos = _separar_correos(correo) if correo is not None else ([], [])
     with SyncSession() as session:
         contacto = _upsert_contacto(session, telefono, nombre)
-        if correo is not None:
-            contacto.correo = correo
+        # se persisten solo los correos con formato válido (separados por coma); los mal
+        # formados no se guardan (romperían la invitación de Calendar) y se piden de nuevo.
+        if validos:
+            contacto.correo = ",".join(validos)
         if ciudad is not None:
             contacto.ciudad = ciudad
         if empresa is not None:
             # empresa es dato de cliente/lead, no de contacto -> clientes.nombre_empresa
             _upsert_cliente(session, telefono, tipo="lead", nombre_empresa=empresa)
         session.commit()
-        return {"telefono": telefono, "estado": "guardado"}
+    if invalidos:
+        return {
+            "telefono": telefono,
+            "estado": "correo_invalido",
+            "guardados": validos,
+            "invalidos": invalidos,
+            "mensaje": f"Estos correos no tienen formato válido: {', '.join(invalidos)}. Pídele al cliente que los confirme.",
+        }
+    return {"telefono": telefono, "estado": "guardado", "guardados": validos}
 
 
 def _obtener_horario_atencion() -> str:
@@ -363,48 +415,71 @@ def _obtener_horario_atencion() -> str:
     return "Lunes a Viernes de 8am a 6pm"
 
 
-def _es_error_de_cuota_google(e: Exception) -> bool:
-    from googleapiclient.errors import HttpError
-    if isinstance(e, HttpError):
-        if e.resp.status in (403, 429):
-            content_str = str(e.content).lower()
-            if any(k in content_str for k in ("quota", "rate", "exhaust", "limit")):
-                return True
-    err_str = str(e).lower()
-    if any(k in err_str for k in ("quota", "ratelimit", "resource_exhausted", "rate limit")):
-        return True
-    return False
+def _get_parametro(clave: str) -> str | None:
+    """Lee un valor de la tabla parametros; None si no existe o está vacío."""
+    try:
+        with SyncSession() as session:
+            param = session.query(Parametro).filter(Parametro.clave == clave).first()
+            if param and param.valor:
+                return param.valor
+    except Exception as e:
+        logger.error("Error al obtener parametro '%s' de DB: %s", clave, e)
+    return None
 
 
-def _manejar_error_cuota_google(e: Exception, area: str, telefono: str | None = None, nombre: str | None = None, resumen: str | None = None):
-    logger.exception("Error de cuota de Google detectado: %s", e)
-    
+def _alertar_infra_fallo_google(e: Exception, area: str, telefono: str | None = None, nombre: str | None = None):
+    """Solo alerta a infra de un fallo de Google (log + correo + WhatsApp al líder de
+    infra), SIN escalar el caso del cliente a humano. Se usa en el camino degradado:
+    cuando el Calendar no responde el agendamiento sigue con la franja de BD, pero
+    infra igual se entera para arreglar el Calendar."""
+    logger.exception("Fallo de Google detectado (área=%s): %s", area, e)
+
     # 1. Enviar correo a infra
     email_infra = os.getenv("EMAIL_INFRA")
     if email_infra:
         try:
             enviar_email(
                 email_infra,
-                "ALERTA: Límite de Cuota de Google Excedido en SysBot",
-                f"El bot de WhatsApp detectó un límite de cuota excedido en las APIs de Google.\n\n"
+                "ALERTA: Fallo en servicios de Google en SysBot",
+                f"El bot de WhatsApp detectó un fallo en las APIs de Google.\n\n"
                 f"Detalle del error:\n{e}\n\n"
                 f"Área afectada: {area}\n"
                 f"Contacto: {nombre} ({telefono})"
             )
         except Exception as mail_err:
             logger.error("No se pudo enviar correo de alerta a infra (%s): %s", email_infra, mail_err)
-            
-    # 2. Escalar a humano si tenemos los datos
+
+    # 2. Enviar WhatsApp al líder de infra (HU-058)
+    whatsapp_lider_infra = _get_parametro("whatsapp_lider_infra")
+    if whatsapp_lider_infra:
+        try:
+            _enviar_whatsapp_directo(
+                whatsapp_lider_infra,
+                f"ALERTA SysBot: fallo en servicios de Google.\n"
+                f"Área: {area}\nContacto: {nombre} ({telefono})\nError: {e}",
+            )
+        except Exception as wa_err:
+            logger.error("No se pudo enviar WhatsApp de alerta al líder de infra (%s): %s", whatsapp_lider_infra, wa_err)
+    else:
+        logger.info("No hay whatsapp_lider_infra configurado; se omite alerta por WhatsApp a infra.")
+
+
+def _manejar_fallo_google(e: Exception, area: str, telefono: str | None = None, nombre: str | None = None, resumen: str | None = None):
+    """Fallo de Google que además requiere escalar el caso del cliente a humano:
+    alerta a infra (log + correo + WhatsApp) y luego escala. Se usa cuando el fallo
+    deja al cliente sin atención posible; el camino degradado usa solo
+    _alertar_infra_fallo_google."""
+    _alertar_infra_fallo_google(e, area, telefono, nombre)
     if telefono and nombre:
         try:
             escalar_a_humano(
                 telefono=telefono,
                 nombre=nombre,
-                resumen_caso=resumen or f"Fallo en servicio de Google (Cuota excedida). Motivo: {e}",
+                resumen_caso=resumen or f"Fallo en servicio de Google. Motivo: {e}",
                 area=area
             )
         except Exception as esc_err:
-            logger.error("Fallo al auto-escalar por error de cuota: %s", esc_err)
+            logger.error("Fallo al auto-escalar por fallo de Google: %s", esc_err)
 
 
 def agendar_cita(nombre: str, telefono: str, motivo: str, fecha: str, hora: str, area: str) -> dict:
@@ -417,6 +492,11 @@ def agendar_cita(nombre: str, telefono: str, motivo: str, fecha: str, hora: str,
         personas = _agentes_por_area(session, area)
         contacto = session.get(Contacto, telefono)
         correo_cliente = contacto.correo if contacto else None
+    # el/los correos del cliente pueden venir separados por coma; solo los de formato
+    # válido se usan como invitados (Google rechaza el evento si un attendee es inválido).
+    correos_cliente, correos_invalidos = _separar_correos(correo_cliente)
+    if correos_invalidos:
+        logger.warning("Correos de cliente inválidos, no se invitan: %s", correos_invalidos)
     if not personas:
         return {"disponible": False, "mensaje": f"No hay nadie configurado para el área '{area}'."}
 
@@ -438,17 +518,15 @@ def agendar_cita(nombre: str, telefono: str, motivo: str, fecha: str, hora: str,
             try:
                 libres = horarios_libres(fecha, persona.email, persona.hora_inicio, persona.hora_fin)
             except Exception as e:
-                if _es_error_de_cuota_google(e):
-                    _manejar_error_cuota_google(
-                        e, area, telefono, nombre,
-                        resumen=f"Fallo al agendar cita de {motivo} para el {fecha} a las {hora}. Error de cuota de Google."
-                    )
-                    horario = _obtener_horario_atencion()
-                    return {
-                        "estado": "error_servicio",
-                        "mensaje": f"Servicio temporalmente inactivo, será contactado a la mayor brevedad en el horario de {horario}."
-                    }
-                raise
+                # Degradado: no se pudo consultar el Calendar del agente -> se usa la
+                # franja horaria de la BD (hora_inicio/hora_fin) como disponibilidad.
+                # Se alerta a infra pero NO se escala ni se bloquea al cliente.
+                _alertar_infra_fallo_google(e, area, telefono, nombre)
+                logger.warning(
+                    "Calendar no disponible para %s (%s); usando franja horaria de BD.",
+                    persona.nombre, persona.email
+                )
+                libres = _franjas_bd(persona.hora_inicio, persona.hora_fin)
             # ponytail: horarios_libres() consulta el Calendar real vía freebusy, que no
             # lanza error ni refleja huecos si el service account no tiene acceso al
             # calendario (ver crear_evento_calendar) — _CITAS_DB es la fuente de verdad
@@ -465,44 +543,51 @@ def agendar_cita(nombre: str, telefono: str, motivo: str, fecha: str, hora: str,
                 }
                 _CITAS_DB.append(cita)
                 try:
-                    evento = crear_evento_calendar(nombre, telefono, motivo, fecha, hora, persona.email, correo_cliente)
+                    # Consistencia: el evento se crea en el MISMO calendario que se consultó
+                    # para disponibilidad (el del agente). Así queda visible en su freebusy y
+                    # no se puede doble-agendar. El cliente va como invitado.
+                    evento = crear_evento_calendar(
+                        nombre, telefono, motivo, fecha, hora,
+                        calendar_id=persona.email, correos_invitados=correos_cliente,
+                    )
                     cita["calendar_link"] = evento.get("htmlLink")
+                    cita["calendar_id"] = persona.email
+                    cita["invitados"] = list(correos_cliente)
                 except Exception as e:
-                    if _es_error_de_cuota_google(e):
-                        _manejar_error_cuota_google(
-                            e, area, telefono, nombre,
-                            resumen=f"Fallo al registrar cita de {motivo} en Calendar para el {fecha} a las {hora}. Error de cuota de Google."
-                        )
-                        horario = _obtener_horario_atencion()
-                        return {
-                            "estado": "error_servicio",
-                            "mensaje": f"Servicio temporalmente inactivo, será contactado a la mayor brevedad en el horario de {horario}."
-                        }
-                    # ponytail: nunca dejar esto en silencio — sin log, una cita "exitosa" para
-                    # el cliente puede no existir realmente en el calendario del agente.
-                    logger.exception("crear_evento_calendar falló para cita_id=%s email=%s", cita_id, persona.email)
-                    cita["calendar_error"] = str(e)
-                if correo_cliente:
+                    # El calendario del agente no es accesible (mal configurado / sin
+                    # compartir). Se alerta a infra y se cae al calendario autenticado
+                    # (CALENDAR_ID), con el agente ahora como invitado.
+                    _alertar_infra_fallo_google(e, area, telefono, nombre)
+                    invitados_fb = ([persona.email] if _validar_correo(persona.email) else []) + correos_cliente
                     try:
-                        enviar_email(
-                            correo_cliente,
-                            f"Confirmación de cita SysPlus - {fecha} {hora}",
-                            f"Hola {nombre},\n\nTu cita quedó registrada:\nMotivo: {motivo}\n"
-                            f"Fecha: {fecha}\nHora: {hora}\nTe atenderá: {persona.nombre} ({area}).\n\nSaludos, SysPlus.",
+                        evento = crear_evento_calendar(
+                            nombre, telefono, motivo, fecha, hora,
+                            calendar_id=CALENDAR_ID, correos_invitados=invitados_fb,
                         )
+                        cita["calendar_link"] = evento.get("htmlLink")
+                        cita["calendar_id"] = CALENDAR_ID
+                        cita["invitados"] = invitados_fb
+                        cita["calendar_fallback_primary"] = True
+                    except Exception as e2:
+                        # Ni el calendario del agente ni el autenticado: la cita ya está
+                        # registrada en _CITAS_DB; se sigue sin evento en Calendar.
+                        cita["calendar_error"] = str(e2)
+                        cita["calendar_degradado"] = True
+                if correos_cliente:
+                    try:
+                        for correo_dest in correos_cliente:
+                            enviar_email(
+                                correo_dest,
+                                f"Confirmación de cita SysPlus - {fecha} {hora}",
+                                f"Hola {nombre},\n\nTu cita quedó registrada:\nMotivo: {motivo}\n"
+                                f"Fecha: {fecha}\nHora: {hora}\nTe atenderá: {persona.nombre} ({area}).\n\nSaludos, SysPlus.",
+                            )
                         cita["email_enviado"] = True
                     except Exception as e:
-                        if _es_error_de_cuota_google(e):
-                            _manejar_error_cuota_google(
-                                e, area, telefono, nombre,
-                                resumen=f"Fallo al enviar correo de confirmación de cita a {correo_cliente}. Error de cuota de Google."
-                            )
-                            horario = _obtener_horario_atencion()
-                            return {
-                                "estado": "error_servicio",
-                                "mensaje": f"Servicio temporalmente inactivo, será contactado a la mayor brevedad en el horario de {horario}."
-                            }
-                        logger.exception("enviar_email falló para cita_id=%s correo=%s", cita_id, correo_cliente)
+                        # Degradado: la cita ya está registrada; el correo de
+                        # confirmación falló. Se alerta a infra y se sigue.
+                        _alertar_infra_fallo_google(e, area, telefono, nombre)
+                        cita["email_enviado"] = False
                         cita["email_error"] = str(e)
                 try:
                     reunion = espocrm.crear_reunion(nombre, telefono, motivo, fecha, hora)
@@ -535,32 +620,15 @@ def consultar_disponibilidad_agenda(area: str) -> list[dict]:
             try:
                 libres.update(horarios_libres(d, persona.email, persona.hora_inicio, persona.hora_fin))
             except Exception as e:
-                if _es_error_de_cuota_google(e):
-                    # Obtener la conversación activa reciente para escalar
-                    telefono, nombre = None, None
-                    try:
-                        from .db import Conversacion, Contacto
-                        with SyncSession() as sess:
-                            conv = sess.query(Conversacion).filter(
-                                Conversacion.estado == "abierta"
-                            ).order_by(Conversacion.creado_en.desc()).first()
-                            if conv:
-                                telefono = conv.telefono
-                                contacto = sess.get(Contacto, telefono)
-                                nombre = contacto.nombre if contacto else telefono
-                    except Exception as db_err:
-                        logger.error("No se pudo obtener conversación reciente del DB: %s", db_err)
-                    
-                    _manejar_error_cuota_google(
-                        e, area, telefono, nombre,
-                        resumen="Fallo al consultar disponibilidad de agenda. Error de cuota de Google."
-                    )
-                    horario = _obtener_horario_atencion()
-                    return [{
-                        "estado": "error_servicio",
-                        "mensaje": f"Servicio temporalmente inactivo, será contactado a la mayor brevedad en el horario de {horario}."
-                    }]
-                raise
+                # Degradado: no se pudo consultar el Calendar del agente -> se usa la
+                # franja horaria de la BD como disponibilidad. Se alerta a infra pero
+                # NO se escala ni se corta la respuesta al cliente.
+                _alertar_infra_fallo_google(e, area)
+                logger.warning(
+                    "Calendar no disponible para %s (%s); usando franja horaria de BD.",
+                    persona.nombre, persona.email
+                )
+                libres.update(_franjas_bd(persona.hora_inicio, persona.hora_fin))
         resultado.append({"fecha": d, "horarios_libres": sorted(libres)})
     return resultado
 
@@ -749,8 +817,7 @@ def escalar_a_humano(telefono: str, nombre: str, resumen_caso: str, area: str) -
             enviar_email(EMAIL_SOPOPRTE if False else EMAIL_SOPORTE, f"[{caso_id}] Escalamiento SysBot - {nombre}", cuerpo)
             radicado.email_enviado = True
         except Exception as e:
-            if _es_error_de_cuota_google(e):
-                _manejar_error_cuota_google(e, area, telefono, nombre, resumen=f"Fallo en envío de correo de soporte: {resumen_caso}")
+            logger.exception("enviar_email falló en escalar_a_humano para caso_id=%s: %s", caso_id, e)
             radicado.email_enviado = False
 
         agentes = _agentes_por_area(session, area)
@@ -825,6 +892,21 @@ def escalar_a_humano(telefono: str, nombre: str, resumen_caso: str, area: str) -
             conv.espera_desde = datetime.now(timezone.utc)
             conv.espera_hasta = None
         session.commit()
+
+        # HU-059: notificar al líder comercial del área que un caso quedó en cola
+        # (solo aquí, nunca en la rama de asignación directa a agente libre).
+        whatsapp_lider_area = _get_parametro(f"whatsapp_lider_{_norm(area)}")
+        if whatsapp_lider_area:
+            try:
+                _enviar_whatsapp_directo(
+                    whatsapp_lider_area,
+                    f"[{caso_id}] Caso de {nombre} en cola (área {area}), posición {delante + 1}.",
+                )
+            except Exception as wa_err:
+                logger.error("No se pudo notificar por WhatsApp al líder de %s (%s): %s", area, whatsapp_lider_area, wa_err)
+        else:
+            logger.info("No hay whatsapp_lider_%s configurado; se omite alerta de cola.", _norm(area))
+
         return {
             "caso_id": caso_id, "estado": "en_cola", "posicion": delante + 1,
             "email_enviado": radicado.email_enviado,
