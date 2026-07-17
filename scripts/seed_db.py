@@ -31,8 +31,8 @@ PARAMETROS = {
     "correo_soporte": ("soporte@sysplus.com", "Correo general de soporte"),
     "correo_proveedores": ("proveedores@sysplus.com", "Correo general para proveedores"),
     "timeout_pausa_minutos": ("60", "Minutos de inactividad tras los cuales una pausa (opción B) se cierra sola"),
-    "whatsapp_lider_infra": ("", "Número WhatsApp del líder de infraestructura, alertado ante fallos técnicos de Google/Calendar (EP-015)"),
-    "whatsapp_lider_comercial": ("", "Número WhatsApp del líder comercial, notificado cuando un caso del área comercial entra en cola (EP-015)"),
+    "whatsapp_lider_infra": ("573192931227", "Número WhatsApp del líder de infraestructura, alertado ante fallos técnicos de Google/Calendar (EP-015)"),
+    "whatsapp_lider_comercial": ("573192931227", "Número WhatsApp del líder comercial, notificado cuando un caso del área comercial entra en cola (EP-015)"),
     "whatsapp_lider_soporte": ("", "Número WhatsApp del líder de soporte, notificado cuando un caso del área soporte entra en cola (EP-015)"),
 }
 

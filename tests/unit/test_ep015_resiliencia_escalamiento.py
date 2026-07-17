@@ -11,6 +11,8 @@ from agent.tools import (
     consultar_disponibilidad_agenda,
     escalar_a_humano,
     _manejar_fallo_google,
+    _franjas_bd,
+    _CITAS_DB,
 )
 
 
@@ -48,55 +50,80 @@ def _param_session(valores: dict):
 
 
 class TestManejoGeneralizadoFallosGoogle:
-    """HU-057: cualquier fallo de Google (no solo cuota) queda logueado y escala."""
+    """HU-057: fallo de Google no bloquea; se degrada a la franja de BD y se alerta a infra."""
 
-    def test_refresh_error_en_disponibilidad_loguea_y_escala(self, caplog):
-        """HU-057 Scenario 1."""
+    def test_refresh_error_en_disponibilidad_degrada_a_franja_bd(self, caplog):
+        """HU-057 Scenario 1: al no poder consultar el Calendar, la disponibilidad
+        cae a la franja horaria de la BD del agente y se alerta a infra (sin error_servicio)."""
         with patch("agent.tools.horarios_libres", side_effect=_RefreshError("invalid_grant")), \
-             patch("agent.tools._agentes_por_area", return_value=[MagicMock(email="a@x.com", hora_inicio="09:00", hora_fin="18:00")]), \
+             patch("agent.tools._agentes_por_area", return_value=[MagicMock(email="a@x.com", hora_inicio="09:00", hora_fin="12:00")]), \
              patch("agent.tools.SyncSession", return_value=_param_session({})), \
-             patch("agent.tools._manejar_fallo_google") as mock_manejar:
-            with caplog.at_level(logging.ERROR):
+             patch("agent.tools._alertar_infra_fallo_google") as mock_alertar:
+            with caplog.at_level(logging.WARNING):
                 resultado = consultar_disponibilidad_agenda("comercial")
 
-        assert mock_manejar.called, "debe disparar el flujo de manejo de fallo, no relanzar en silencio"
+        assert mock_alertar.called, "debe alertar a infra del fallo de Calendar"
         assert isinstance(resultado, list)
-        assert resultado[0]["estado"] == "error_servicio"
+        assert all(dia.get("estado") != "error_servicio" for dia in resultado)
+        # franja BD 09:00-12:00 -> 09:00,10:00,11:00
+        assert resultado[0]["horarios_libres"] == _franjas_bd("09:00", "12:00")
 
-    def test_fallo_no_cuota_en_agendar_cita_dispara_manejo(self):
-        """HU-057 Scenario 2: error que NO matchea heurística de cuota (permiso denegado)."""
+    def test_agendar_con_calendar_caido_agenda_con_franja_bd(self):
+        """HU-057 Scenario 2: si no se puede consultar el Calendar, se agenda igual
+        validando contra la franja de BD; se alerta a infra pero no se bloquea al cliente."""
+        _CITAS_DB.clear()
         persona = MagicMock(email="a@x.com", hora_inicio="09:00", hora_fin="18:00", nombre="Agente 1")
+        session = _param_session({})
+        session.get = MagicMock(return_value=None)  # sin contacto -> sin correo cliente
         with patch("agent.tools._agentes_por_area", return_value=[persona]), \
-             patch("agent.tools.SyncSession", return_value=_param_session({})), \
+             patch("agent.tools.SyncSession", return_value=session), \
              patch("agent.tools.horarios_libres", side_effect=Exception("permission denied")), \
-             patch("agent.tools._manejar_fallo_google") as mock_manejar:
+             patch("agent.tools.crear_evento_calendar", return_value={"htmlLink": "http://cal/x"}), \
+             patch("agent.tools.espocrm"), \
+             patch("agent.tools._alertar_infra_fallo_google") as mock_alertar:
             resultado = agendar_cita(
                 nombre="Juan", telefono="3000000000", motivo="Consultoria",
                 fecha="2026-08-01", hora="10:00", area="comercial",
             )
 
-        assert mock_manejar.called
-        assert resultado["estado"] == "error_servicio"
+        assert mock_alertar.called
+        assert "cita_id" in resultado, "debe agendar con la franja de BD, no devolver error_servicio"
+        assert resultado.get("estado") != "error_servicio"
+        _CITAS_DB.clear()
 
-    def test_error_de_cuota_sigue_funcionando_sin_duplicar(self):
-        """HU-057 Scenario 3: regresión — error de cuota sigue ejecutando el flujo una sola vez."""
-        with patch("agent.tools.horarios_libres", side_effect=Exception("quota exceeded")), \
-             patch("agent.tools._agentes_por_area", return_value=[MagicMock(email="a@x.com", hora_inicio="09:00", hora_fin="18:00")]), \
-             patch("agent.tools.SyncSession", return_value=_param_session({})), \
-             patch("agent.tools._manejar_fallo_google") as mock_manejar:
-            consultar_disponibilidad_agenda("comercial")
+    def test_agendar_con_creacion_evento_caida_registra_cita_degradada(self):
+        """HU-057 Scenario 3: si crear el evento en Calendar falla (404), la cita queda
+        registrada igual con marca de degradado; se alerta a infra, no se bloquea."""
+        _CITAS_DB.clear()
+        persona = MagicMock(email="a@x.com", hora_inicio="09:00", hora_fin="18:00", nombre="Agente 1")
+        session = _param_session({})
+        session.get = MagicMock(return_value=None)
+        with patch("agent.tools._agentes_por_area", return_value=[persona]), \
+             patch("agent.tools.SyncSession", return_value=session), \
+             patch("agent.tools.horarios_libres", return_value=["10:00"]), \
+             patch("agent.tools.crear_evento_calendar", side_effect=Exception("HttpError 404 Not Found")), \
+             patch("agent.tools.espocrm"), \
+             patch("agent.tools._alertar_infra_fallo_google") as mock_alertar:
+            resultado = agendar_cita(
+                nombre="Juan", telefono="3000000000", motivo="Consultoria",
+                fecha="2026-08-01", hora="10:00", area="comercial",
+            )
 
-        assert mock_manejar.call_count == 1
+        assert mock_alertar.called
+        assert "cita_id" in resultado
+        assert resultado.get("calendar_degradado") is True
+        assert resultado.get("estado") != "error_servicio"
+        _CITAS_DB.clear()
 
-    def test_happy_path_sin_fallos_no_escala(self):
+    def test_happy_path_sin_fallos_no_alerta(self):
         """HU-057 Scenario 4."""
         with patch("agent.tools.horarios_libres", return_value=["09:00", "10:00"]), \
              patch("agent.tools._agentes_por_area", return_value=[MagicMock(email="a@x.com", hora_inicio="09:00", hora_fin="18:00")]), \
              patch("agent.tools.SyncSession", return_value=_param_session({})), \
-             patch("agent.tools._manejar_fallo_google") as mock_manejar:
+             patch("agent.tools._alertar_infra_fallo_google") as mock_alertar:
             resultado = consultar_disponibilidad_agenda("comercial")
 
-        assert not mock_manejar.called
+        assert not mock_alertar.called
         assert isinstance(resultado, list)
         assert all("estado" not in dia for dia in resultado)
 
