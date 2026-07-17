@@ -186,7 +186,7 @@ class TestValidacionYCorreoInvitado:
             )
         # crear_evento_calendar recibe la lista de invitados (agente + cliente)
         assert mock_evt.called
-        invitados = mock_evt.call_args.args[-1]
+        invitados = mock_evt.call_args.kwargs["correos_invitados"]
         assert "cliente@valido.com" in invitados
         assert "a@x.com" in invitados, "el agente (dueño del calendario) también queda invitado"
         _CITAS_DB.clear()
@@ -207,7 +207,7 @@ class TestValidacionYCorreoInvitado:
                 fecha="2026-08-01", hora="10:00", area="comercial",
             )
         assert mock_evt.called
-        invitados = mock_evt.call_args.args[-1]
+        invitados = mock_evt.call_args.kwargs["correos_invitados"]
         assert "cliente-invalido" not in invitados
         assert invitados == ["a@x.com"], "solo el agente; el correo inválido del cliente se descarta"
         _CITAS_DB.clear()
@@ -228,7 +228,7 @@ class TestValidacionYCorreoInvitado:
                 nombre="Juan", telefono="3000000000", motivo="Consultoria",
                 fecha="2026-08-01", hora="10:00", area="comercial",
             )
-        invitados = mock_evt.call_args.args[-1]
+        invitados = mock_evt.call_args.kwargs["correos_invitados"]
         assert invitados == ["a@x.com", "uno@c.com", "dos@c.com"], "agente + los 2 correos válidos, 'malo' descartado"
         assert resultado["invitados"] == invitados
         # confirmación enviada a cada correo válido del cliente (no al 'malo')

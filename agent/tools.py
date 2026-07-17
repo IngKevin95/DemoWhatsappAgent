@@ -542,11 +542,12 @@ def agendar_cita(nombre: str, telefono: str, motivo: str, fecha: str, hora: str,
                     "area": area, "atendido_por": persona.nombre, "atendido_email": persona.email,
                 }
                 _CITAS_DB.append(cita)
-                # invitados = agente (dueño del calendario) + correos válidos del cliente.
+                # el evento se crea en el calendario autenticado (CALENDAR_ID='primary',
+                # la cuenta OAuth); el agente y los correos del cliente van como invitados.
                 invitados = [persona.email] + correos_cliente if _validar_correo(persona.email) else list(correos_cliente)
                 cita["invitados"] = invitados
                 try:
-                    evento = crear_evento_calendar(nombre, telefono, motivo, fecha, hora, persona.email, invitados)
+                    evento = crear_evento_calendar(nombre, telefono, motivo, fecha, hora, correos_invitados=invitados)
                     cita["calendar_link"] = evento.get("htmlLink")
                 except Exception as e:
                     # Degradado: la cita ya quedó registrada en _CITAS_DB; no se pudo
