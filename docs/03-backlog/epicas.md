@@ -748,9 +748,10 @@ Garantizar que ningún fallo de servicios externos (Google/Calendar) se pierda s
 
 ### Historias
 
-- HU-057: Manejo robusto y observable de fallos de Google/Calendar (no solo cuota).
+- HU-057: Manejo robusto y observable de fallos de Google/Calendar (no solo cuota); degradación a franja de BD.
 - HU-058: Notificación WhatsApp al líder de infraestructura ante fallo técnico.
 - HU-059: Notificación WhatsApp al líder comercial del área cuando un caso entra en cola.
+- HU-060: Validación de correo del cliente e inclusión como invitado en la cita.
 
 ### Layer
 

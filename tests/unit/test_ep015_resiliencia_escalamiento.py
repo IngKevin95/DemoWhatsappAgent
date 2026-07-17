@@ -10,8 +10,10 @@ from agent.tools import (
     agendar_cita,
     consultar_disponibilidad_agenda,
     escalar_a_humano,
+    guardar_datos_contacto,
     _manejar_fallo_google,
     _franjas_bd,
+    _validar_correo,
     _CITAS_DB,
 )
 
@@ -126,6 +128,86 @@ class TestManejoGeneralizadoFallosGoogle:
         assert not mock_alertar.called
         assert isinstance(resultado, list)
         assert all("estado" not in dia for dia in resultado)
+
+
+class TestValidacionYCorreoInvitado:
+    """Validación de formato de correo del cliente + su uso como invitado en la cita."""
+
+    @pytest.mark.parametrize("correo,valido", [
+        ("juan@empresa.com", True),
+        ("j.perez+demo@sub.dominio.co", True),
+        ("juan(arroba)empresa.com", False),
+        ("juan@empresa", False),
+        ("@empresa.com", False),
+        ("juan @empresa.com", False),
+        ("", False),
+        (None, False),
+    ])
+    def test_validar_correo_formato(self, correo, valido):
+        assert _validar_correo(correo) is valido
+
+    def test_correo_invalido_no_se_guarda_y_pide_correccion(self):
+        with patch("agent.tools.SyncSession", return_value=_param_session({})), \
+             patch("agent.tools._upsert_contacto") as mock_up, \
+             patch("agent.tools._upsert_cliente"):
+            resultado = guardar_datos_contacto(
+                telefono="3000000000", nombre="Juan", correo="juan(arroba)empresa.com",
+            )
+        assert resultado["estado"] == "correo_invalido"
+        # no se asignó el correo mal formado al contacto
+        assert not mock_up.return_value.correo or mock_up.return_value.correo != "juan(arroba)empresa.com"
+
+    def test_correo_valido_se_guarda(self):
+        contacto = MagicMock()
+        with patch("agent.tools.SyncSession", return_value=_param_session({})), \
+             patch("agent.tools._upsert_contacto", return_value=contacto), \
+             patch("agent.tools._upsert_cliente"):
+            resultado = guardar_datos_contacto(
+                telefono="3000000000", nombre="Juan", correo="juan@empresa.com",
+            )
+        assert resultado["estado"] == "guardado"
+        assert contacto.correo == "juan@empresa.com"
+
+    def test_correo_valido_del_cliente_se_pasa_como_invitado(self):
+        """El correo válido del cliente llega a crear_evento_calendar como invitado."""
+        _CITAS_DB.clear()
+        persona = MagicMock(email="a@x.com", hora_inicio="09:00", hora_fin="18:00", nombre="Agente 1")
+        session = _param_session({})
+        session.get = MagicMock(return_value=MagicMock(correo="cliente@valido.com"))
+        with patch("agent.tools._agentes_por_area", return_value=[persona]), \
+             patch("agent.tools.SyncSession", return_value=session), \
+             patch("agent.tools.horarios_libres", return_value=["10:00"]), \
+             patch("agent.tools.crear_evento_calendar", return_value={"htmlLink": "http://cal/x"}) as mock_evt, \
+             patch("agent.tools.enviar_email"), \
+             patch("agent.tools.espocrm"):
+            agendar_cita(
+                nombre="Juan", telefono="3000000000", motivo="Consultoria",
+                fecha="2026-08-01", hora="10:00", area="comercial",
+            )
+        # crear_evento_calendar recibe el correo del cliente como último arg (invitado)
+        assert mock_evt.called
+        assert "cliente@valido.com" in mock_evt.call_args.args
+        _CITAS_DB.clear()
+
+    def test_correo_invalido_del_cliente_no_se_pasa_como_invitado(self):
+        _CITAS_DB.clear()
+        persona = MagicMock(email="a@x.com", hora_inicio="09:00", hora_fin="18:00", nombre="Agente 1")
+        session = _param_session({})
+        session.get = MagicMock(return_value=MagicMock(correo="cliente-invalido"))
+        with patch("agent.tools._agentes_por_area", return_value=[persona]), \
+             patch("agent.tools.SyncSession", return_value=session), \
+             patch("agent.tools.horarios_libres", return_value=["10:00"]), \
+             patch("agent.tools.crear_evento_calendar", return_value={"htmlLink": "http://cal/x"}) as mock_evt, \
+             patch("agent.tools.enviar_email"), \
+             patch("agent.tools.espocrm"):
+            agendar_cita(
+                nombre="Juan", telefono="3000000000", motivo="Consultoria",
+                fecha="2026-08-01", hora="10:00", area="comercial",
+            )
+        assert mock_evt.called
+        assert "cliente-invalido" not in mock_evt.call_args.args
+        assert None in mock_evt.call_args.args  # correo_cliente saneado a None
+        _CITAS_DB.clear()
 
 
 class TestNotificacionLiderInfra:

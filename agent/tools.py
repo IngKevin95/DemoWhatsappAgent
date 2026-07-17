@@ -6,6 +6,7 @@ consultan Firebird directamente. Ambos viven en infra de demo separada
 
 import logging
 import os
+import re
 import threading
 import unicodedata
 import uuid
@@ -48,6 +49,14 @@ def _enviar_whatsapp_directo(telefono: str, texto: str) -> None:
     # invisible (por eso "el correo llegó pero el WhatsApp no").
     if resp.status_code >= 400:
         raise RuntimeError(f"Meta rechazó el WhatsApp a {telefono}: {resp.status_code} {resp.text[:200]}")
+
+
+_EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+
+
+def _validar_correo(correo: str | None) -> bool:
+    """Valida el formato básico de un correo (algo@algo.tld). No verifica que exista."""
+    return bool(correo and isinstance(correo, str) and _EMAIL_RE.match(correo.strip()))
 
 
 def _franjas_bd(hora_inicio: str, hora_fin: str) -> list[str]:
@@ -359,17 +368,26 @@ def guardar_datos_contacto(
 ) -> dict:
     """Guarda/actualiza los datos básicos de quien escribe (nombre, empresa, correo, ciudad).
     Llamar apenas el usuario los dé, típicamente al inicio de la conversación."""
+    correo_invalido = correo is not None and not _validar_correo(correo)
     with SyncSession() as session:
         contacto = _upsert_contacto(session, telefono, nombre)
-        if correo is not None:
-            contacto.correo = correo
+        # solo se persiste el correo si tiene formato válido; uno mal formado no se
+        # guarda (rompería la invitación de Calendar) y se pide corrección al cliente.
+        if correo is not None and not correo_invalido:
+            contacto.correo = correo.strip()
         if ciudad is not None:
             contacto.ciudad = ciudad
         if empresa is not None:
             # empresa es dato de cliente/lead, no de contacto -> clientes.nombre_empresa
             _upsert_cliente(session, telefono, tipo="lead", nombre_empresa=empresa)
         session.commit()
-        return {"telefono": telefono, "estado": "guardado"}
+    if correo_invalido:
+        return {
+            "telefono": telefono,
+            "estado": "correo_invalido",
+            "mensaje": f"El correo '{correo}' no tiene un formato válido. Pídele al cliente que lo confirme.",
+        }
+    return {"telefono": telefono, "estado": "guardado"}
 
 
 def _obtener_horario_atencion() -> str:
@@ -461,6 +479,10 @@ def agendar_cita(nombre: str, telefono: str, motivo: str, fecha: str, hora: str,
         personas = _agentes_por_area(session, area)
         contacto = session.get(Contacto, telefono)
         correo_cliente = contacto.correo if contacto else None
+    # un correo mal formado no se usa como invitado: Google rechazaría el evento entero.
+    if correo_cliente and not _validar_correo(correo_cliente):
+        logger.warning("Correo de cliente inválido (%s); no se agrega como invitado ni se envía confirmación.", correo_cliente)
+        correo_cliente = None
     if not personas:
         return {"disponible": False, "mensaje": f"No hay nadie configurado para el área '{area}'."}
 
