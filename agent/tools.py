@@ -1016,6 +1016,11 @@ def finalizar_conversacion(telefono: str, motivo_cierre: str = "usuario") -> dic
             conv.motivo_cierre = motivo_cierre
             if conv.espera_desde and not conv.espera_hasta:
                 conv.espera_hasta = datetime.now(timezone.utc)
+            # Habeas Data: al cerrar la conversación se revoca el consentimiento, de modo
+            # que la próxima conversación del contacto vuelva a pedirlo explícitamente.
+            contacto = session.get(Contacto, telefono)
+            if contacto:
+                contacto.consentimiento_datos = False
             session.commit()
             return {"status": "cerrada", "motivo": motivo_cierre}
         return {"status": "error", "mensaje": "No hay conversación abierta para cerrar."}
