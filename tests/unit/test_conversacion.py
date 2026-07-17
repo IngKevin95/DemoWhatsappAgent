@@ -50,3 +50,24 @@ async def test_abrir_y_cerrar_conversacion_helper():
         cerrado = await cerrar_conversacion(1)
         assert cerrado is True
         assert mock_conv.estado == "cerrada"
+
+
+def test_finalizar_conversacion_revoca_consentimiento():
+    """Habeas Data: al cerrar la conversación, el consentimiento del contacto se
+    revoca para que la próxima conversación lo vuelva a pedir."""
+    from agent.tools import finalizar_conversacion
+
+    conv = MagicMock(estado="abierta", espera_desde=None, espera_hasta=None)
+    contacto = MagicMock(consentimiento_datos=True)
+    session = MagicMock()
+    session.__enter__ = MagicMock(return_value=session)
+    session.__exit__ = MagicMock(return_value=False)
+    session.query.return_value.filter.return_value.order_by.return_value.first.return_value = conv
+    session.get.return_value = contacto
+
+    with patch("agent.tools.SyncSession", return_value=session):
+        resultado = finalizar_conversacion("573000000000", motivo_cierre="usuario")
+
+    assert resultado["status"] == "cerrada"
+    assert conv.estado == "cerrada"
+    assert contacto.consentimiento_datos is False, "el consentimiento debe revocarse al cerrar"

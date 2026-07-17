@@ -257,6 +257,12 @@ async def _revisar_inactividad():
                         if conv.espera_desde and not conv.espera_hasta:
                             conv.espera_hasta = datetime.now(timezone.utc).replace(tzinfo=None)
 
+                        # Habeas Data: al cerrar por inactividad se revoca el consentimiento
+                        # para que la próxima conversación del contacto lo vuelva a pedir.
+                        contacto_cierre = await session.get(Contacto, telefono)
+                        if contacto_cierre:
+                            contacto_cierre.consentimiento_datos = False
+
                         await session.commit()
                         await enviar_mensaje_seguro(telefono, MENSAJE_CIERRE, canal=canal)
         except Exception:
