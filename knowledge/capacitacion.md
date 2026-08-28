@@ -2,7 +2,7 @@
 
 ## Capacitación de usuarios - Planificación y Talleres
 
-El área de capacitación tiene como objetivo instruir a los usuarios en el uso adecuado de los módulos de SysPlus ERP.
+El área de capacitación tiene como objetivo instruir a los usuarios en el uso adecuado de los módulos de DemoCorp ERP.
 
 ### Servicios ofrecidos
 - Capacitación presencial y virtual.

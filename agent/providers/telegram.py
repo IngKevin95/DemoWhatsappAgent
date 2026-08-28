@@ -32,7 +32,7 @@ class ProveedorTelegram(ProveedorWhatsApp):
             
             if "text" in msg:
                 texto = msg["text"]
-                return MensajeEntrante(telefono=telefono, texto=texto, nombre=nombre)
+                return MensajeEntrante(telefono=telefono, texto=texto, nombre=nombre, mensaje_id=str(msg.get("message_id")))
             
             # Additional logic for audio/documents could go here later
             return None

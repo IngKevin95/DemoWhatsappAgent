@@ -12,7 +12,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, BackgroundTasks
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import PlainTextResponse, JSONResponse, Response
 from sqlalchemy import select, text
@@ -49,6 +49,10 @@ logger = logging.getLogger(__name__)
 
 # App startup tracking (for /health endpoint)
 _app_start_time = datetime.now(timezone.utc)
+
+# Deduplication cache for incoming messages
+_processed_messages = {}
+_PROCESSED_TTL_SECONDS = 300
 
 # Secrets to scrub from logs
 _SECRETS_PATTERNS = [
@@ -156,7 +160,7 @@ async def probe_firebird(timeout: int = 3) -> str:
             conn = connect(
                 database=dsn,
                 user=os.getenv("FIREBIRD_USER", "sysdba"),
-                password=os.getenv("ISC_PASSWORD", "sysbot"),
+                password=os.getenv("ISC_PASSWORD", "demobot"),
             )
             conn.close()
             return "ok"
@@ -324,7 +328,7 @@ app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 @app.get("/")
 async def root():
-    return {"status": "SysBot activo"}
+    return {"status": "DemoAgent activo"}
 
 
 @app.get("/health")
@@ -470,7 +474,7 @@ async def procesar_mensaje_entrante(mensaje, request: Request = None, canal="met
                 {"id": "SI", "title": "Sí, acepto"},
                 {"id": "NO", "title": "No, gracias"}
             ]
-            saludo = "¡Hola! Soy SysBot, el asesor virtual de SysPlus. " if es_nuevo else ""
+            saludo = "¡Hola! Soy DemoAgent, el asesor virtual de DemoCorp. " if es_nuevo else ""
             await enviar_mensaje_seguro(
                 mensaje.telefono,
                 saludo + "Por políticas de privacidad (Habeas Data), necesitamos tu consentimiento para procesar tus datos. Por favor elige una opción.",
@@ -591,7 +595,7 @@ async def verificar_webhook(request: Request):
 
 
 @app.post("/webhook")
-async def recibir_webhook(request: Request):
+async def recibir_webhook(request: Request, background_tasks: BackgroundTasks):
     cuerpo = await request.body()
     firma = request.headers.get("X-Hub-Signature-256")
     if not proveedor_meta.validar_firma(cuerpo, firma):
@@ -601,8 +605,22 @@ async def recibir_webhook(request: Request):
     mensaje = proveedor_meta.parsear_webhook(payload)
     if mensaje is None:
         return {"status": "ignorado"}
+        
+    if mensaje.mensaje_id:
+        now = datetime.now(timezone.utc).timestamp()
+        if mensaje.mensaje_id in _processed_messages:
+            if now - _processed_messages[mensaje.mensaje_id] < _PROCESSED_TTL_SECONDS:
+                return {"status": "ok", "msg": "duplicate"}
+        _processed_messages[mensaje.mensaje_id] = now
+        
+        # Cleanup old messages
+        keys_to_delete = [k for k, v in _processed_messages.items() if now - v >= _PROCESSED_TTL_SECONDS]
+        for k in keys_to_delete:
+            del _processed_messages[k]
     
-    return await procesar_mensaje_entrante(mensaje, request=request, canal="meta")
+    # Run in background to prevent webhook retries due to LLM latency
+    background_tasks.add_task(procesar_mensaje_entrante, mensaje, request=None, canal="meta")
+    return {"status": "ok"}
 
 
 
@@ -614,7 +632,7 @@ async def verificar_webhook_telegram(request: Request):
     return PlainTextResponse("Token inválido", status_code=403)
 
 @app.post("/webhook/telegram")
-async def recibir_webhook_telegram(request: Request):
+async def recibir_webhook_telegram(request: Request, background_tasks: BackgroundTasks):
     cuerpo = await request.body()
     firma = request.headers.get("X-Telegram-Bot-Api-Secret-Token")
     if not proveedor_telegram.validar_firma(cuerpo, firma):
@@ -624,8 +642,22 @@ async def recibir_webhook_telegram(request: Request):
     mensaje = proveedor_telegram.parsear_webhook(payload)
     if mensaje is None:
         return {"status": "ignorado"}
+
+    if mensaje.mensaje_id:
+        now = datetime.now(timezone.utc).timestamp()
+        if mensaje.mensaje_id in _processed_messages:
+            if now - _processed_messages[mensaje.mensaje_id] < _PROCESSED_TTL_SECONDS:
+                return {"status": "ok", "msg": "duplicate"}
+        _processed_messages[mensaje.mensaje_id] = now
         
-    return await procesar_mensaje_entrante(mensaje, request=request, canal="telegram")
+        # Cleanup old messages
+        keys_to_delete = [k for k, v in _processed_messages.items() if now - v >= _PROCESSED_TTL_SECONDS]
+        for k in keys_to_delete:
+            del _processed_messages[k]
+
+    # Run in background
+    background_tasks.add_task(procesar_mensaje_entrante, mensaje, request=None, canal="telegram")
+    return {"status": "ok"}
 
 @app.post("/agentes/{telefono_cliente}/liberar")
 async def liberar_agente(telefono_cliente: str):

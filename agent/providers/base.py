@@ -10,6 +10,7 @@ class MensajeEntrante:
     nombre: Optional[str] = None
     tipo: str = "text"
     media_id: Optional[str] = None
+    mensaje_id: Optional[str] = None
 
 
 class ProveedorWhatsApp(ABC):

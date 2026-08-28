@@ -1,1 +1,1 @@
-CREATE DATABASE nocodb OWNER sysbot;
+CREATE DATABASE nocodb OWNER demobot;

@@ -1,8 +1,10 @@
 -- =============================================================================
 -- DemoWhatsappAgent — PostgreSQL Schema
--- DB: sysbot  |  User: sysbot
+-- DB: demobot  |  User: demobot
 -- Actualizado: 2026-07-14  (al dia con EP-006: conversaciones + radicados)
 -- =============================================================================
+
+CREATE EXTENSION IF NOT EXISTS vector;
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;

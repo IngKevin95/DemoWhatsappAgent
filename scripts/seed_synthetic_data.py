@@ -57,7 +57,7 @@ def seed():
                 continue
             session.add(Agente(
                 area_id=area.id, nombre=nombre,
-                email=f"{nombre.lower().replace(' ', '.').replace('í','i').replace('ó','o')}@sysplus.com",
+                email=f"{nombre.lower().replace(' ', '.').replace('í','i').replace('ó','o')}@democorp.com",
                 telefono=None,
                 hora_inicio=random.choice(["07:00", "08:00", "09:00"]),
                 hora_fin=random.choice(["16:00", "17:00", "18:00"]),

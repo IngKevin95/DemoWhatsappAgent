@@ -6,8 +6,9 @@ import re
 from datetime import datetime
 
 import yaml
-from google import genai
-from google.genai import errors, types
+from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_core.tools import StructuredTool
+from langchain_core.messages import HumanMessage, AIMessage, SystemMessage
 
 from . import tools
 from .middleware.circuit_breaker import CircuitBreaker
@@ -16,7 +17,7 @@ from .prometheus_metrics import demobot_errors_total
 logger = logging.getLogger(__name__)
 
 def _fallback_generar_respuesta(*args, **kwargs) -> str:
-    """Fallback cuando circuit breaker abre (Gemini caído)."""
+    """Fallback cuando circuit breaker abre (Gemini cado)."""
     return _get_fallback_message()
 
 # FIX-REPAIR-004: Timeout config from .env
@@ -30,10 +31,6 @@ _circuit_breaker_gemini = CircuitBreaker(
     fallback_fn=_fallback_generar_respuesta,
 )
 
-# ponytail: estas tools reciben `telefono` como identificador del remitente real,
-# no como dato que el modelo deba inventar/extraer del texto. functools.partial no
-# basta (inspect.signature sigue mostrando el parámetro), así que se envuelven a
-# mano sin `telefono` en la firma expuesta al LLM.
 def _tools_con_telefono(telefono: str) -> list:
     def registrar_lead_crm(
         nombre: str,
@@ -56,38 +53,42 @@ def _tools_con_telefono(telefono: str) -> list:
         correo: str | None = None,
         ciudad: str | None = None,
     ) -> dict:
-        """Guarda/actualiza los datos básicos de quien escribe (nombre, empresa, correo, ciudad)."""
+        """Guarda/actualiza los datos bsicos de quien escribe (nombre, empresa, correo, ciudad)."""
         return tools.guardar_datos_contacto(telefono, nombre, empresa, correo, ciudad)
 
     def agendar_cita(nombre: str, motivo: str, fecha: str, hora: str, area: str) -> dict:
-        """Agenda una cita si el horario pedido está libre en el calendario de la primera
-        persona disponible de esa área (según su rango horario propio). fecha: 'YYYY-MM-DD'.
+        """Agenda una cita si el horario pedido est libre en el calendario de la primera
+        persona disponible de esa rea (segn su rango horario propio). fecha: 'YYYY-MM-DD'.
         hora: 'HH:MM', debe ser una de HORARIOS_DISPONIBLES (09:00, 10:30, 14:00, 16:00)."""
         return tools.agendar_cita(nombre, telefono, motivo, fecha, hora, area)
 
     def crear_ticket_soporte(descripcion: str, modulo: str) -> dict:
-        """Crea un ticket de soporte para el remitente actual."""
+        """Crea un ticket de soporte para el remitente actual.
+        Regla importante: Crea el ticket y documenta en la descripcin ('descripcion') el problema reportado.
+        DEBES informarle al usuario el nmero de radicado (ticket_id) y TAMBIN el nmero de caso del CRM (crm_case_number), si este ltimo est disponible.
+        Luego, intenta brindar ayuda tcnica directamente al usuario.
+        Solo si tu ayuda no es suficiente o el usuario pide ms ayuda, llama a escalar_a_humano."""
         return tools.crear_ticket_soporte(telefono, descripcion, modulo)
 
     def escalar_a_humano(nombre: str, resumen_caso: str, area: str) -> dict:
-        """Escala la conversación a un agente humano del área dada."""
+        """Escala la conversacin a un agente humano del rea dada."""
         return tools.escalar_a_humano(telefono, nombre, resumen_caso, area)
 
     def reclasificar_caso_sin_licencia(caso_id: str, nombre: str) -> dict:
-        """Si ya existía un radicado de soporte (caso_id tipo ESC-123) y luego
+        """Si ya exista un radicado de soporte (caso_id tipo ESC-123) y luego
         consultar_licencia devuelve sin_licencia: comenta y bloquea ese caso en el CRM,
         y lo reescala a comercial."""
         return tools.reclasificar_caso_sin_licencia(caso_id, telefono, nombre)
 
     def _registrar_cliente(numero_identificacion: str | None = None, nit_empresa: str | None = None, nombre_empresa: str | None = None, sector: str | None = None, actividad: str | None = None, empleados: str | None = None) -> dict:
-        """Marca un contacto como cliente confirmado y guarda sus datos de identificación empresarial/personal."""
+        """Marca un contacto como cliente confirmado y guarda sus datos de identificacin empresarial/personal."""
         return tools.registrar_cliente(
             telefono, numero_identificacion, nit_empresa, nombre_empresa, sector, actividad, empleados
         )
 
     def _finalizar_conversacion(motivo_cierre: str = "usuario") -> dict:
-        """Cierra la conversación actual de forma explícita.
-        Debe llamarse cuando el usuario se despide o indica que ya no requiere más ayuda."""
+        """Cierra la conversacin actual de forma explcita.
+        Debe llamarse cuando el usuario se despide o indica que ya no requiere ms ayuda."""
         return tools.finalizar_conversacion(telefono, motivo_cierre)
 
     return [
@@ -102,10 +103,8 @@ def _tools_con_telefono(telefono: str) -> list:
         _finalizar_conversacion,
     ]
 
-client = genai.Client(api_key=os.getenv("GEMINI_API_KEY"))
 
 def _get_fallback_message() -> str:
-    # Obtener el horario de atención desde la base de datos o usar default
     horario = "Lunes a Viernes de 8am a 6pm"
     try:
         from .db import SyncSession, Parametro
@@ -116,7 +115,7 @@ def _get_fallback_message() -> str:
     except Exception as e:
         logger.error(f"Error al obtener horario_atencion de la base de datos: {e}")
     
-    return f"Servicio temporalmente inactivo, será contactado a la mayor brevedad en el horario de {horario}."
+    return f"Servicio temporalmente inactivo, ser contactado a la mayor brevedad en el horario de {horario}."
 
 
 class FallbackDetector(list):
@@ -124,10 +123,10 @@ class FallbackDetector(list):
         if not isinstance(item, str):
             return False
         old_fallbacks = [
-            "Disculpa, se me cruzaron los cables un segundo 😅 ¿me repites eso último?",
-            "Uy, no logré procesar bien tu mensaje. ¿Puedes contarme de nuevo qué necesitas?",
-            "Perdona la demora, tuve un pequeño inconveniente técnico. ¿En qué te ayudo?",
-            "Se me fue el hilo por un momento, disculpa. ¿Me lo repites, por favor?",
+            "Disculpa, se me cruzaron los cables un segundo Y~. me repites eso ltimo?",
+            "Uy, no logr procesar bien tu mensaje. Puedes contarme de nuevo qu necesitas?",
+            "Perdona la demora, tuve un pequeo inconveniente tcnico. En qu te ayudo?",
+            "Se me fue el hilo por un momento, disculpa. Me lo repites, por favor?",
         ]
         if item in old_fallbacks:
             return True
@@ -154,36 +153,35 @@ TOOL_FUNCTIONS_FIJAS = [
     tools.consultar_parametro,
 ]
 
-
-def _tools_para(telefono: str) -> list:
-    return TOOL_FUNCTIONS_FIJAS + _tools_con_telefono(telefono)
-
-MODEL_NAME = os.getenv("MODEL_NAME", "gemini-3.1-flash-lite")
-
-
-def _historial_a_contenido(historial: list[dict]) -> list[types.Content]:
-    return [
-        types.Content(
-            role="model" if m["role"] == "assistant" else "user",
-            parts=[types.Part(text=m["content"])],
-        )
-        for m in historial
-    ]
+def _get_lc_tools(telefono: str) -> list:
+    lc_tools = []
+    for fn in TOOL_FUNCTIONS_FIJAS:
+        lc_tools.append(StructuredTool.from_function(fn))
+    for fn in _tools_con_telefono(telefono):
+        lc_tools.append(StructuredTool.from_function(fn))
+    return lc_tools
 
 
-def _retry_delay_segundos(exc: errors.ClientError, default: float = 5.0) -> float:
-    # ponytail: parseo best-effort del retryDelay que manda la API ("31s"); si no viene, default fijo.
-    try:
-        for detail in exc.details.get("error", {}).get("details", []):
-            if detail.get("@type", "").endswith("RetryInfo"):
-                return float(detail.get("retryDelay", f"{default}s").rstrip("s"))
-    except Exception:
-        pass
-    return default
+MODEL_NAME = os.getenv("MODEL_NAME", "gemini-1.5-flash") # Updated to supported LangChain model
+
+# Initialize the LangChain Chat model
+llm = ChatGoogleGenerativeAI(
+    model=MODEL_NAME,
+    api_key=os.getenv("GEMINI_API_KEY"),
+    temperature=0.0
+)
+
+def _historial_a_lc_messages(historial: list[dict], sys_inst: str) -> list:
+    messages = [SystemMessage(content=sys_inst)]
+    for m in historial:
+        if m["role"] == "assistant":
+            messages.append(AIMessage(content=m["content"]))
+        else:
+            messages.append(HumanMessage(content=m["content"]))
+    return messages
 
 
 def _sanitizar_input(texto: str) -> str:
-    # Remove SQL/script keywords
     texto = re.sub(r"(?i)(drop|delete|update|insert|select|script|eval|exec)", "", texto)
     texto = re.sub(r"<script[^>]*>.*?</script>", "", texto, flags=re.DOTALL)
     return texto.strip()
@@ -193,88 +191,91 @@ async def generar_respuesta(
     mensaje: str,
     telefono: str,
     historial: list[dict] | None = None,
-    herramientas: list | None = None,
+    herramientas: list | None = None, # kept for signature compat, but not used directly here
     timeout_segundos: float = None,
 ) -> str:
-    """FIX-REPAIR-004: Genera respuesta con timeout configurable y yellow zone logging."""
-    # Use .env config if not specified
+    """Genera respuesta usando LangChain Tool Calling Agent con circuit breaker."""
     if timeout_segundos is None:
         timeout_segundos = GEMINI_TIMEOUT_SECONDS
     if historial is None:
         historial = []
 
-    # Sanitize input
+    has_existing_case = False
+    try:
+        from .db import SyncSession, Radicado
+        with SyncSession() as session:
+            existing_radicado = session.query(Radicado).filter(Radicado.telefono == telefono).first()
+            if existing_radicado:
+                has_existing_case = True
+    except Exception as e:
+        logger.warning("Error al consultar caso existente para %s: %s", telefono, e)
+
+    sys_inst = SYSTEM_PROMPT + f"\n\nFecha de hoy: {datetime.now().strftime('%Y-%m-%d')}."
+    if has_existing_case:
+        sys_inst += "\n\nNOTA DE CONTEXTO REAL: El cliente ya tiene un caso/radicado registrado. NO le solicites sus datos bsicos de contacto (nombre, empresa, correo, ciudad) ni identificacin, procede directamente con sus consultas."
+
     texto_usuario = _sanitizar_input(mensaje)
 
     texto = None
     tiempo_inicio = None
+    
+    # Preparamos las herramientas de LangChain y atamos el LLM
+    lc_tools = _get_lc_tools(telefono)
+    llm_with_tools = llm.bind_tools(lc_tools)
+    
+    from langgraph.prebuilt import create_react_agent
+    agent_executor = create_react_agent(llm, lc_tools)
+    
+    messages = _historial_a_lc_messages(historial, sys_inst)
+    messages.append(HumanMessage(content=texto_usuario))
+    
     for intento in range(2):
         try:
-            chat = client.chats.create(
-                model=MODEL_NAME,
-                history=_historial_a_contenido(historial),
-                config=types.GenerateContentConfig(
-                    system_instruction=SYSTEM_PROMPT + f"\n\nFecha de hoy: {datetime.now().strftime('%Y-%m-%d')}.",
-                    tools=_tools_para(telefono),
-                ),
-            )
-            # Send message with timeout + circuit breaker
-            try:
-                import time as time_module
-                tiempo_inicio = time_module.time()
+            import time as time_module
+            tiempo_inicio = time_module.time()
 
-                # FIX-REPAIR-002: Apply circuit breaker to Gemini call.
-                # CircuitBreaker.__call__ es un DECORADOR: envuelve la fn y
-                # devuelve el wrapper; hay que EJECUTAR ese wrapper.
-                def _send_with_cb():
-                    wrapped = _circuit_breaker_gemini(
-                        lambda: chat.send_message(texto_usuario)
-                    )
-                    return wrapped()
-
-                respuesta = await asyncio.wait_for(
-                    asyncio.to_thread(_send_with_cb),
-                    timeout=timeout_segundos
+            def _send_with_cb():
+                wrapped = _circuit_breaker_gemini(
+                    lambda: agent_executor.invoke({"messages": messages})
                 )
-                # Check if result is fallback string (from circuit breaker)
-                if isinstance(respuesta, str):
-                    return respuesta
-                texto = respuesta.text
+                return wrapped()
 
-                # FIX-REPAIR-004: Yellow zone logging if latency > 5s
-                if tiempo_inicio:
-                    latency = time_module.time() - tiempo_inicio
-                    if latency > GEMINI_YELLOW_ZONE_SECONDS:
-                        logger.warning(
-                            f"Gemini latency YELLOW ZONE for {telefono}: {latency:.2f}s "
-                            f"(threshold: {GEMINI_YELLOW_ZONE_SECONDS}s, timeout: {timeout_segundos}s)"
-                        )
-                break
-            except asyncio.TimeoutError:
-                demobot_errors_total.labels(error_type="gemini_timeout").inc()
-                logger.warning("Timeout en Gemini para %s después de %.1fs", telefono, timeout_segundos)
-                break
-
-        except errors.ClientError as e:
-            if e.code == 429 and intento == 0:
-                demobot_errors_total.labels(error_type="gemini_rate_limit").inc()
-                espera = _retry_delay_segundos(e)
-                if espera <= 2.0:
-                    logger.warning("429 de Gemini para %s, reintentando en %.1fs", telefono, espera)
-                    await asyncio.sleep(espera)
-                    continue
+            result = await asyncio.wait_for(
+                asyncio.to_thread(_send_with_cb),
+                timeout=timeout_segundos
+            )
+            
+            if isinstance(result, str):
+                texto = result
+            else:
+                last_content = result["messages"][-1].content
+                if isinstance(last_content, list):
+                    texto = " ".join([b.get("text", "") for b in last_content if isinstance(b, dict) and "text" in b])
                 else:
-                    logger.warning("429 de Gemini para %s: espera de %.1fs excede límite seguro de webhook. No se reintenta.", telefono, espera)
-            demobot_errors_total.labels(error_type="gemini_client_error").inc()
-            logger.error("Error de cliente Gemini para %s (código %s): %s", telefono, getattr(e, 'code', 'N/A'), e)
+                    texto = str(last_content)
+
+            if tiempo_inicio:
+                latency = time_module.time() - tiempo_inicio
+                if latency > GEMINI_YELLOW_ZONE_SECONDS:
+                    logger.warning(
+                        f"Gemini latency YELLOW ZONE for {telefono}: {latency:.2f}s "
+                        f"(threshold: {GEMINI_YELLOW_ZONE_SECONDS}s, timeout: {timeout_segundos}s)"
+                    )
+            break
+        except asyncio.TimeoutError:
+            demobot_errors_total.labels(error_type="gemini_timeout").inc()
+            logger.warning("Timeout en Gemini para %s despus de %.1fs", telefono, timeout_segundos)
             break
         except Exception as e:
             demobot_errors_total.labels(error_type="gemini_exception").inc()
             logger.error("Fallo inesperado generando respuesta para %s: %s", telefono, e)
+            if "429" in str(e) and intento == 0:
+                demobot_errors_total.labels(error_type="gemini_rate_limit").inc()
+                await asyncio.sleep(5.0)
+                continue
             break
 
     if not texto:
-        # Auto-escalar a humano en caso de caída del servicio/IA
         nombre = telefono
         try:
             from .db import SyncSession, Contacto
@@ -283,18 +284,18 @@ async def generar_respuesta(
                 if contacto and contacto.nombre:
                     nombre = contacto.nombre
         except Exception as db_err:
-            logger.error("No se pudo consultar el nombre del contacto en DB para auto-escalar: %s", db_err)
+            logger.error("No se pudo consultar el nombre en DB para auto-escalar: %s", db_err)
 
         try:
             from . import tools
             tools.escalar_a_humano(
                 telefono=telefono,
                 nombre=nombre,
-                resumen_caso="Fallo en el servicio conversacional (Gemini API fuera de servicio, timeout o límite de cuota).",
+                resumen_caso="Fallo en el servicio conversacional (Gemini API fuera de servicio, timeout o lmite de cuota).",
                 area="soporte"
             )
         except Exception as esc_err:
-            logger.error("Fallo al auto-escalar conversación tras error de Gemini: %s", esc_err)
+            logger.error("Fallo al auto-escalar conversacin tras error de Gemini: %s", esc_err)
 
         texto = _get_fallback_message()
 
@@ -304,15 +305,16 @@ async def generar_respuesta(
 async def clasificar_intencion(texto: str) -> str:
     """Classify intent from user message into 'comercial', 'soporte' or 'otro'."""
     try:
-        response = await client.aio.models.generate_content(
-            model=MODEL_NAME,
-            contents=texto,
-            config=types.GenerateContentConfig(
-                system_instruction="Clasifica el siguiente mensaje en una sola palabra: 'comercial', 'soporte' u 'otro'. Responde únicamente con esa palabra.",
-                temperature=0.0
-            )
+        response = await llm.ainvoke(
+            [
+                SystemMessage(content="Clasifica el siguiente mensaje en una sola palabra: 'comercial', 'soporte' u 'otro'. Responde unicamente con esa palabra."),
+                HumanMessage(content=texto)
+            ]
         )
-        tipo = response.text.strip().lower()
+        content = response.content
+        if isinstance(content, list):
+            content = " ".join([b.get("text", "") for b in content if isinstance(b, dict) and "text" in b])
+        tipo = str(content).strip().lower()
         if tipo not in ["comercial", "soporte", "otro"]:
             return "otro"
         return tipo

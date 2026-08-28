@@ -2,7 +2,7 @@
   {
     "query": "¿Cuánto cuesta la licencia del módulo de Nómina?",
     "intent": "comercial",
-    "file": "sysplus_modulos.md",
+    "file": "democorp_modulos.md",
     "section": "Nómina",
     "expected_entities": {
       "modulo": "Nómina"
@@ -12,7 +12,7 @@
   {
     "query": "precio modulo contabilidad anual",
     "intent": "comercial",
-    "file": "sysplus_modulos.md",
+    "file": "democorp_modulos.md",
     "section": "Contabilidad",
     "expected_entities": {
       "modulo": "Contabilidad"
@@ -27,7 +27,7 @@
     "expected_entities": {
       "tema": "combos"
     },
-    "ground_truth": "ERP SysPlus, CRM, Facturación Electrónica, Inventarios, Contabilidad..."
+    "ground_truth": "ERP DemoCorp, CRM, Facturación Electrónica, Inventarios, Contabilidad..."
   },
   {
     "query": "¿Qué módulos incluye el Combo Emprendedor?",
@@ -42,7 +42,7 @@
   {
     "query": "Tienen algun paquete economico para punto de venta pos?",
     "intent": "comercial",
-    "file": "sysplus_modulos.md",
+    "file": "democorp_modulos.md",
     "section": "POS",
     "expected_entities": {
       "modulo": "POS"
@@ -110,7 +110,7 @@
     "ground_truth": "Causas frecuentes: Documentos sin contabilizar. Periodo contable cerrado parcialmente. Cuentas mal parametrizadas. Terceros o centros de costo incompletos."
   },
   {
-    "query": "El sistema SysPlus esta demasiado lento hoy en todas las pantallas",
+    "query": "El sistema DemoCorp esta demasiado lento hoy en todas las pantallas",
     "intent": "soporte",
     "file": "errores_fallas_comunes_demo.md",
     "section": "Falla común: lentitud general del sistema",
@@ -140,7 +140,7 @@
     "ground_truth": "Empresa. Proyecto. Responsable. Módulos."
   },
   {
-    "query": "¿Cómo puedo renovar mi licencia anual de SysPlus?",
+    "query": "¿Cómo puedo renovar mi licencia anual de DemoCorp?",
     "intent": "comercial",
     "file": "licenciamiento.md",
     "section": "Preguntas frecuentes",
@@ -162,7 +162,7 @@
   {
     "query": "¿Tienen soporte técnico incluido con la licencia o toca pagarlo aparte?",
     "intent": "comercial",
-    "file": "sysplus_modulos.md",
+    "file": "democorp_modulos.md",
     "section": "Precios y Soporte",
     "expected_entities": {
       "tema": "soporte incluido"

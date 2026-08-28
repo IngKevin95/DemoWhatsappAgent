@@ -371,6 +371,7 @@ class TestNotificacionLiderComercialEnCola:
              patch("agent.tools._agentes_por_area", return_value=[MagicMock(id=1, telefono="3001111111", nombre="Agente 1")]), \
              patch("agent.tools._ocupados", return_value={1}), \
              patch("agent.tools.espocrm.crear_caso", return_value={"id": "CRM-1"}), \
+             patch("agent.tools.espocrm.consultar_caso", return_value={"id": "CRM-1", "number": 123}), \
              patch("agent.tools.enviar_email", return_value=None), \
              patch("agent.tools.Radicado", return_value=radicado_mock), \
              patch("agent.tools._enviar_whatsapp_directo") as mock_wa:
@@ -391,6 +392,7 @@ class TestNotificacionLiderComercialEnCola:
              patch("agent.tools._agentes_por_area", return_value=[MagicMock(id=1, telefono=None, nombre="Agente 1")]), \
              patch("agent.tools._ocupados", return_value=set()), \
              patch("agent.tools.espocrm.crear_caso", return_value={"id": "CRM-1"}), \
+             patch("agent.tools.espocrm.consultar_caso", return_value={"id": "CRM-1", "number": 123}), \
              patch("agent.tools.enviar_email", return_value=None), \
              patch("agent.tools.Radicado", return_value=radicado_mock), \
              patch("agent.tools._enviar_whatsapp_directo") as mock_wa:
@@ -408,6 +410,7 @@ class TestNotificacionLiderComercialEnCola:
              patch("agent.tools._agentes_por_area", return_value=[MagicMock(id=1, telefono="3001111111", nombre="Agente 1")]), \
              patch("agent.tools._ocupados", return_value={1}), \
              patch("agent.tools.espocrm.crear_caso", return_value={"id": "CRM-1"}), \
+             patch("agent.tools.espocrm.consultar_caso", return_value={"id": "CRM-1", "number": 123}), \
              patch("agent.tools.enviar_email", return_value=None), \
              patch("agent.tools.Radicado", return_value=radicado_mock), \
              patch("agent.tools._enviar_whatsapp_directo") as mock_wa:
@@ -425,6 +428,7 @@ class TestNotificacionLiderComercialEnCola:
              patch("agent.tools._agentes_por_area", return_value=[MagicMock(id=1, telefono="3001111111", nombre="Agente 1")]), \
              patch("agent.tools._ocupados", return_value={1}), \
              patch("agent.tools.espocrm.crear_caso", return_value={"id": "CRM-1"}), \
+             patch("agent.tools.espocrm.consultar_caso", return_value={"id": "CRM-1", "number": 123}), \
              patch("agent.tools.enviar_email", return_value=None), \
              patch("agent.tools.Radicado", return_value=radicado_mock), \
              patch("agent.tools._enviar_whatsapp_directo", side_effect=Exception("fallo meta")):

@@ -58,7 +58,7 @@ def demo():
         time.sleep(DELAY_SEGUNDOS)
         enviar(wa_id, f"Mi cédula es {identificacion}, tengo un problema con el módulo de Facturación")
         time.sleep(DELAY_SEGUNDOS)
-    print("\nListo. Revisa logs de sysbot (docker compose logs -f sysbot) para ver las respuestas.")
+    print("\nListo. Revisa logs de demobot (docker compose logs -f demobot) para ver las respuestas.")
 
 
 if __name__ == "__main__":

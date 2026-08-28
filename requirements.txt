@@ -20,3 +20,12 @@ pytest-cov
 pybreaker
 bandit
 reportlab
+langchain
+langchain-google-genai
+langchain-community
+langgraph
+langchain-core
+langchain-postgres
+psycopg-pool
+pypdf
+tiktoken

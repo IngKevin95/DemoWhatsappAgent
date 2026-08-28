@@ -1,4 +1,4 @@
-# Casos de prueba conversacionales para SysBot, de básico a complejo.
+# Casos de prueba conversacionales para DemoAgent, de básico a complejo.
 # Cada caso es una conversación multi-turno contra agent.brain.generar_respuesta
 # (sin pasar por WhatsApp). "espera_keywords" es una lista de regex (OR, case-insensitive)
 # que deben aparecer en la respuesta de ese turno; se puede omitir si no aplica.
@@ -14,7 +14,7 @@
   categoria: basico
   descripcion: Pregunta general sobre qué hace la empresa (usa knowledge base).
   turnos:
-    - usuario: "¿Qué es SysPlus y qué módulos manejan?"
+    - usuario: "¿Qué es DemoCorp y qué módulos manejan?"
       espera_keywords: ["nombre|empresa|correo|ciudad|contacto"]
     - usuario: "Me llamo Carlos Perez, de Comercializadora Sol, mi correo es carlos@sol.com y soy de Cali."
       espera_keywords: ["módulo|modulo"]

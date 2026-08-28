@@ -125,8 +125,8 @@ response = client.models.generate_content(
 
 | BD | Motor | Tablas | Propósito |
 |----|-------|--------|----------|
-| **sysbot** | Postgres | Contacto, Parametro, Modulo, Oferta, Mensaje | Datos de negocio + historial |
-| **nocodb** | Postgres (schema separado) | (Gemelas de sysbot) | UI admin (NocoDB) |
+| **demobot** | Postgres | Contacto, Parametro, Modulo, Oferta, Mensaje | Datos de negocio + historial |
+| **nocodb** | Postgres (schema separado) | (Gemelas de demobot) | UI admin (NocoDB) |
 | **licencias.fdb** | Firebird 3.0 | LICENCIAS | Validación de soporte (demo-only) |
 | **EspoCRM** | Postgres (espocrm_demo DB) | Lead, Case, Account, Opportunity | CRM (demo-only) |
 
@@ -253,7 +253,7 @@ REST API (http://espocrm:8081/api/v1)
 | `GOOGLE_APPLICATION_CREDENTIALS` | `/app/credentials.json` (volumen) | Si volumen se filtra | ⚠️ Aceptable demo |
 | `GOOGLE_OAUTH_TOKEN` | `token.json` (volumen) | Sin encriptación en filesystem | ⚠️ Aceptable demo |
 | `META_API_TOKEN` | `.env` | Plain text | ⚠️ Aceptable demo |
-| `DATABASE_URL` | `.env` | Default user `sysbot`/`sysbot` | ⚠️ Weak credenciales |
+| `DATABASE_URL` | `.env` | Default user `demobot`/`demobot` | ⚠️ Weak credenciales |
 
 ### Validaciones
 

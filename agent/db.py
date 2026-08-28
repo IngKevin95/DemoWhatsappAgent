@@ -6,7 +6,7 @@ from sqlalchemy import create_engine
 from sqlalchemy.ext.asyncio import create_async_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://sysbot:sysbot@localhost:5432/sysbot")
+DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://demobot:demobot@localhost:5432/demobot")
 SYNC_URL = DATABASE_URL.replace("postgresql://", "postgresql+psycopg2://", 1)
 ASYNC_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 

@@ -1,6 +1,6 @@
 # Área de Facturación
 
-## Facturación interna - Emisión de Cobros a Clientes de SysPlus
+## Facturación interna - Emisión de Cobros a Clientes de DemoCorp
 
 Esta sección detalla los cobros propios de la empresa hacia sus clientes por licenciamiento, soporte técnico anual y renovaciones del software ERP.
 
@@ -15,7 +15,7 @@ Gestionar la facturación de los productos, licencias y servicios comercializado
 - NIT, razón social, correo de recepción de facturación electrónica y número de factura a consultar.
 
 ### Preguntas frecuentes
-- **¿Cómo descargar mi factura de SysPlus?** Se envía automáticamente al correo fiscal registrado; también puede solicitar copia a facturacion@sysplus.com.
+- **¿Cómo descargar mi factura de DemoCorp?** Se envía automáticamente al correo fiscal registrado; también puede solicitar copia a facturacion@democorp.com.
 - **¿Cómo verificar el estado de mi pago?** Enviar el comprobante bancario al correo de facturación para su conciliación.
 
 ### Recomendaciones

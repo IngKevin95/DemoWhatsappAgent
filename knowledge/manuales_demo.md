@@ -1,8 +1,8 @@
-# Manuales rápidos SysPlus ERP
+# Manuales rápidos DemoCorp ERP
 
 ## Facturación electrónica - Manual rápido de operación
 
-**Objetivo:** Emitir facturas electrónicas válidas ante la DIAN desde SysPlus.
+**Objetivo:** Emitir facturas electrónicas válidas ante la DIAN desde DemoCorp.
 
 ### Pasos de la Demo:
 1. Validar que el cliente tenga NIT, razón social, correo de facturación y responsabilidad fiscal parametrizados.

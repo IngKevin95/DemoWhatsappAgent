@@ -1,4 +1,4 @@
-# Reporte de pruebas — SysBot (DemoWhatsappAgent)
+# Reporte de pruebas — DemoAgent (DemoWhatsappAgent)
 
 Fecha: 2026-07-14
 Rama: `fix/close-wiring-gaps-ep005`
@@ -150,7 +150,7 @@ Todos los bugs #1-#5 fueron corregidos en la rama `fix/close-wiring-gaps-ep005`
 `probe_firebird` en el host Windows lanza *"Firebird Client Library could not be
 determined"* — falta la DLL nativa `fbclient` fuera de Docker (mismo límite que
 `tools.py`). El fix de código es correcto por paridad con `tools.py:163-165`; se
-ejecuta bien dentro del contenedor `sysbot` (la imagen incluye el cliente).
+ejecuta bien dentro del contenedor `demobot` (la imagen incluye el cliente).
 
 ### Los 18 escenarios que aún fallan NO son bugs de código
 
@@ -236,7 +236,7 @@ bugs de código pendientes.
 tienen bug de código pendiente: dependen de (a) capacidad del modelo lite,
 (b) aserciones de test estrechas, (c) `fbclient` fuera de Docker. Palancas para
 subirlos (fuera de alcance por decisión del usuario): modelo más capaz + cuota de
-pago; aflojar aserciones; correr dentro del contenedor `sysbot` (Firebird).
+pago; aflojar aserciones; correr dentro del contenedor `demobot` (Firebird).
 
 ## Acciones NO realizadas (por indicación del usuario)
 - No se hizo commit ni push.

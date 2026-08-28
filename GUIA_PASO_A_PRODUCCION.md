@@ -1,11 +1,11 @@
-# Guía de Paso a Producción - Sysbot (DemoWhatsappAgent)
+# Guía de Paso a Producción - Demobot (DemoWhatsappAgent)
 
 Este documento detalla todos los aspectos técnicos, configuraciones y precauciones necesarias para desplegar exitosamente la aplicación en un entorno productivo.
 
 ---
 
 ## 1. Infraestructura y Hosting
-- **Requisitos Mínimos:** Se recomienda un servidor VPS (ej. AWS EC2, DigitalOcean Droplet) con al menos 2 vCPU y 4GB de RAM para soportar los contenedores de Postgres, NocoDB, la aplicación Python (Sysbot) y los agentes de monitoreo (Prometheus/Grafana).
+- **Requisitos Mínimos:** Se recomienda un servidor VPS (ej. AWS EC2, DigitalOcean Droplet) con al menos 2 vCPU y 4GB de RAM para soportar los contenedores de Postgres, NocoDB, la aplicación Python (Demobot) y los agentes de monitoreo (Prometheus/Grafana).
 - **Orquestación:** Utilizar `docker-compose.prod.yml` para levantar los servicios. Asegurarse de que este archivo no exponga puertos de bases de datos directamente al exterior (ej. el puerto de Postgres debe ser solo interno a la red de Docker o filtrado por firewall).
 - **Reverse Proxy y SSL/TLS:** 
   - La aplicación **debe** correr detrás de HTTPS. Meta no envía webhooks a URLs inseguras (HTTP).
@@ -25,14 +25,14 @@ El archivo `.env` en producción debe estar estrictamente protegido (sin commits
 
 ## 3. Base de Datos y Persistencia
 - **Volúmenes de Docker:** Los datos de PostgreSQL y NocoDB deben persistir en volúmenes nombrados de Docker o montajes directos en el host para evitar pérdida de datos si los contenedores se reinician o reconstruyen.
-- **Backups:** Configurar un cron job o servicio (ej. `pg_dump`) para respaldar regularmente la base de datos `sysbot.db`. Las conversaciones y estados de clientes se guardan allí.
+- **Backups:** Configurar un cron job o servicio (ej. `pg_dump`) para respaldar regularmente la base de datos `demobot.db`. Las conversaciones y estados de clientes se guardan allí.
 
 ---
 
 ## 4. Archivos Estáticos y Documentos (PDFs)
 - **Rutas Públicas:** El sistema ahora envía documentos utilizando el tipo `document` nativo de Meta. Esto significa que cuando el bot recomienda un manual, Meta descargará el PDF de tu servidor usando la `PUBLIC_BASE_URL`. 
 - **Disponibilidad:** Asegúrate de que la carpeta `static/` (y `/static/pdfs/`) esté accesible públicamente y no esté bloqueada por configuraciones restrictivas en tu Reverse Proxy.
-- **Actualización de Conocimiento:** Cada vez que actualices un manual o un archivo markdown en la carpeta `knowledge/`, deberás reconstruir la imagen Docker de `sysbot` (ya que estos archivos se integran a la imagen mediante el comando `COPY` en el `Dockerfile`).
+- **Actualización de Conocimiento:** Cada vez que actualices un manual o un archivo markdown en la carpeta `knowledge/`, deberás reconstruir la imagen Docker de `demobot` (ya que estos archivos se integran a la imagen mediante el comando `COPY` en el `Dockerfile`).
 
 ---
 
@@ -52,8 +52,8 @@ El archivo `.env` en producción debe estar estrictamente protegido (sin commits
 ## 7. Despliegue (Deploy)
 - Dado que se ha retirado el flujo automático (`deploy.yml`), las actualizaciones de código en el VPS productivo deben seguir un proceso manual (o un script gestionado):
   1. Descargar (Pull) los últimos cambios de la rama principal (`main` o `develop`).
-  2. Reconstruir la imagen sin usar caché para las carpetas estáticas: `docker compose -f docker-compose.prod.yml build --no-cache sysbot`.
-  3. Reiniciar el servicio sin tiempos de inactividad extremos: `docker compose -f docker-compose.prod.yml up -d sysbot`.
+  2. Reconstruir la imagen sin usar caché para las carpetas estáticas: `docker compose -f docker-compose.prod.yml build --no-cache demobot`.
+  3. Reiniciar el servicio sin tiempos de inactividad extremos: `docker compose -f docker-compose.prod.yml up -d demobot`.
 
 ---
 

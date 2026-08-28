@@ -11,10 +11,10 @@ datasources:
   - name: PostgreSQL
     type: postgres
     url: postgres:5432
-    user: sysbot
+    user: demobot
     secureJsonData:
-      password: sysbot
+      password: demobot
     jsonData:
-      database: sysbot
+      database: demobot
       sslmode: disable
     editable: true

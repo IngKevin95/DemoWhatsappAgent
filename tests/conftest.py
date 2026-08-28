@@ -50,6 +50,9 @@ def mock_espocrm():
     mock.crear_caso = Mock(
         return_value={"case_id": "CASE-001", "status": "Nuevo"}
     )
+    mock.consultar_caso = Mock(
+        return_value={"id": "CASE-001", "number": 100, "status": "Nuevo"}
+    )
     mock.obtener_cliente = Mock(
         return_value={"id": "CL-001", "nombre": "Acme Corp", "estado": "lead"}
     )

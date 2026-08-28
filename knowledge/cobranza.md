@@ -1,18 +1,18 @@
 # Área de Cobranza
 
-## Cobranza y Cartera interna - Gestión de Facturación de SysPlus
+## Cobranza y Cartera interna - Gestión de Facturación de DemoCorp
 
-Esta sección describe el proceso interno de cobranza y cartera comercial para los clientes de la empresa (pagos por el uso de licencias y soporte de SysPlus ERP).
+Esta sección describe el proceso interno de cobranza y cartera comercial para los clientes de la empresa (pagos por el uso de licencias y soporte de DemoCorp ERP).
 
 ### Objetivo
 Gestionar la recuperación de cartera de la empresa por servicios prestados y licenciamiento.
 
 ### Servicios internos
-- Consulta de cartera de clientes de SysPlus.
+- Consulta de cartera de clientes de DemoCorp.
 - Gestión de acuerdos de pago, envío de recordatorios y confirmación de pagos recibidos.
 
 ### Información que solicita el cliente
-- Saldo pendiente de sus facturas de SysPlus ERP.
+- Saldo pendiente de sus facturas de DemoCorp ERP.
 - Detalle de facturas vencidas y próximos vencimientos de contratos.
 
 ### Preguntas frecuentes

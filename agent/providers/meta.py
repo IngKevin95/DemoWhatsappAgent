@@ -43,16 +43,16 @@ class ProveedorMeta(ProveedorWhatsApp):
             
             if msg.get("type") == "text":
                 texto = msg["text"]["body"]
-                return MensajeEntrante(telefono=telefono, texto=texto, nombre=nombre)
+                return MensajeEntrante(telefono=telefono, texto=texto, nombre=nombre, mensaje_id=msg.get("id"))
             elif msg.get("type") == "interactive" and msg.get("interactive", {}).get("type") == "button_reply":
                 texto = msg["interactive"]["button_reply"]["id"]
-                return MensajeEntrante(telefono=telefono, texto=texto, nombre=nombre)
+                return MensajeEntrante(telefono=telefono, texto=texto, nombre=nombre, mensaje_id=msg.get("id"))
             elif msg.get("type") == "audio":
                 media_id = msg["audio"]["id"]
-                return MensajeEntrante(telefono=telefono, texto="", nombre=nombre, tipo="audio", media_id=media_id)
+                return MensajeEntrante(telefono=telefono, texto="", nombre=nombre, tipo="audio", media_id=media_id, mensaje_id=msg.get("id"))
             elif msg.get("type") == "document":
                 media_id = msg["document"]["id"]
-                return MensajeEntrante(telefono=telefono, texto="", nombre=nombre, tipo="document", media_id=media_id)
+                return MensajeEntrante(telefono=telefono, texto="", nombre=nombre, tipo="document", media_id=media_id, mensaje_id=msg.get("id"))
             else:
                 return None
                 
