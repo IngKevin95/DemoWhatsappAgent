@@ -1,17 +1,17 @@
 services:
   postgres:
-    image: postgres:16
+    image: pgvector/pgvector:pg16
     environment:
-      POSTGRES_USER: sysbot
-      POSTGRES_PASSWORD: sysbot
-      POSTGRES_DB: sysbot
+      POSTGRES_USER: demobot
+      POSTGRES_PASSWORD: demobot
+      POSTGRES_DB: demobot
     ports:
       - "5441:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
       - ./init-db:/docker-entrypoint-initdb.d
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U sysbot -d sysbot"]
+      test: ["CMD-SHELL", "pg_isready -U demobot -d demobot"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -24,9 +24,9 @@ services:
     ports:
       - "8080:8080"
     environment:
-      NC_DB: "pg://postgres:5432?u=sysbot&p=sysbot&d=nocodb"
-      NC_ADMIN_EMAIL: "admin@sysplus.com"
-      NC_ADMIN_PASSWORD: "sysbotpassword123"
+      NC_DB: "pg://postgres:5432?u=demobot&p=demobot&d=nocodb"
+      NC_ADMIN_EMAIL: "admin@democorp.com"
+      NC_ADMIN_PASSWORD: "demobotpassword123"
     volumes:
       - ncdata:/usr/app/data
 
@@ -40,7 +40,7 @@ services:
     command: ["python", "scripts/seed_db.py"]
     restart: "no"
 
-  sysbot:
+  demobot:
     build: .
     depends_on:
       postgres:
@@ -60,13 +60,13 @@ services:
       FIREBIRD_HOST: firebird
     networks:
       - default
-      - sysplus-demo
+      - democorp-demo
     volumes:
       - ./token.json:/app/token.json
 
 networks:
   default:
-  sysplus-demo:
+  democorp-demo:
     external: true
 
 volumes:

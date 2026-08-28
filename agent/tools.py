@@ -23,7 +23,7 @@ from .integrations.google import CALENDAR_ID, crear_evento_calendar, enviar_emai
 logger = logging.getLogger(__name__)
 
 KNOWLEDGE_DIR = Path(__file__).parent.parent / "knowledge"
-EMAIL_SOPORTE = os.getenv("EMAIL_SOPORTE", "soporte@sysplus.com")
+EMAIL_SOPORTE = os.getenv("EMAIL_SOPORTE", "soporte@democorp.com")
 
 
 def _norm(s: str) -> str:
@@ -89,7 +89,7 @@ _CITAS_DB: list[dict] = []
 _CITAS_LOCK = threading.Lock()  # ponytail: evita doble-agendar el mismo cupo entre threads concurrentes
 
 FIREBIRD_HOST = os.getenv("FIREBIRD_HOST", "localhost")
-FIREBIRD_PASSWORD = os.getenv("ISC_PASSWORD", "sysbot")
+FIREBIRD_PASSWORD = os.getenv("ISC_PASSWORD", "demobot")
 
 
 def cargar_info_negocio() -> str:
@@ -99,46 +99,50 @@ def cargar_info_negocio() -> str:
     )
 
 
-def buscar_en_knowledge(modulo: str) -> str:
-    contenido = cargar_info_negocio()
-    objetivo = _norm(modulo)
-
-    stop_words = {"de", "del", "el", "la", "un", "una", "y", "modulo", "manual", "documento", "ficha", "tecnica", "sobre", "para"}
-    query_words = [w for w in objetivo.split() if w not in stop_words]
-    if not query_words:
-        query_words = [objetivo]
-
-    matching_blocks = []
-    for bloque in contenido.split("## "):
-        if not bloque.strip():
-            continue
-        header = bloque.split("\n")[0]
-        header_norm = _norm(header)
-
-        is_match = False
-        if objetivo in header_norm or header_norm in objetivo:
-            is_match = True
-        else:
-            header_words = set(header_norm.split())
-            if any(qw in header_words for qw in query_words):
-                is_match = True
-
-        if is_match:
-            matching_blocks.append("## " + bloque.strip())
-
-    if matching_blocks:
-        resultado = "\n\n".join(matching_blocks)
-        # Reemplazar paths relativos con la URL pública completa para que el LLM
-        # tenga el link absoluto y pueda incluirlo directamente en su respuesta.
+def buscar_en_knowledge(consulta: str) -> str:
+    """Busca informacion, manuales y caracteristicas tecnicas en la base de conocimiento usando inteligencia artificial (RAG). 
+    Úsalo siempre que te pregunten sobre qué hace un módulo, detalles de licencias, facturación o cualquier funcionalidad del sistema."""
+    from langchain_postgres.vectorstores import PGVector
+    from langchain_google_genai import GoogleGenerativeAIEmbeddings
+    
+    DB_URL = os.getenv("DATABASE_URL", "postgresql://demobot:demobot@localhost:5441/demobot")
+    DB_URL = DB_URL.replace("postgresql://", "postgresql+psycopg://")
+    
+    embeddings = GoogleGenerativeAIEmbeddings(model="models/embedding-001")
+    vector_store = PGVector(
+        embeddings=embeddings,
+        collection_name="democorp_knowledge",
+        connection=DB_URL,
+        use_jsonb=True,
+    )
+    
+    try:
+        # Recuperar los 4 fragmentos más relevantes
+        resultados = vector_store.similarity_search(consulta, k=4)
+        
+        if not resultados:
+            return "No se encontró información en la base de datos de conocimiento sobre: " + consulta
+            
+        texto_resultado = []
+        for doc in resultados:
+            fuente = doc.metadata.get("source", "Desconocida")
+            fuente_nombre = Path(fuente).name if fuente != "Desconocida" else fuente
+            
+            # Formatear el resultado
+            bloque = f"[Fuente: {fuente_nombre}]\n{doc.page_content}\n"
+            texto_resultado.append(bloque)
+            
+        respuesta = "\n\n---\n\n".join(texto_resultado)
+        
+        # Ajuste de URL para PDFs
         public_base = os.getenv("PUBLIC_BASE_URL", "").rstrip("/")
-        if public_base and "/static/pdfs/" in resultado:
-            resultado = resultado.replace("/static/pdfs/", f"{public_base}/static/pdfs/")
-        return resultado
-
-    with SyncSession() as session:
-        nombres = [m.nombre for m in session.query(Modulo).all()]
-    return f"No encontré información específica sobre '{modulo}'. Módulos disponibles: {', '.join(nombres)}."
-
+        if public_base and ".pdf" in respuesta:
+            respuesta = respuesta.replace("/static/pdfs/", f"{public_base}/static/pdfs/")
+            
+        return respuesta
+    except Exception as e:
+        logger.error(f"Fallo en busqueda RAG: {e}")
+        return "Hubo un error interno al consultar la base de conocimiento."
 
 def _oferta_activa(session, modulo_id: int) -> Oferta | None:
     hoy = date.today()
@@ -155,6 +159,7 @@ def _oferta_activa(session, modulo_id: int) -> Oferta | None:
 
 
 def consultar_precio_modulo(modulo: str) -> dict:
+    """Consulta el precio de un modulo especifico, devolviendo precios con y sin descuento."""
     objetivo = _norm(modulo)
     with SyncSession() as session:
         mods = session.query(Modulo).all()
@@ -206,6 +211,7 @@ def consultar_combos() -> list[dict]:
 
 
 def consultar_ofertas_activas() -> list[dict]:
+    """Consulta una lista con todas las ofertas o promociones actualmente activas."""
     hoy = date.today()
     with SyncSession() as session:
         ofertas = (
@@ -440,7 +446,7 @@ def _alertar_infra_fallo_google(e: Exception, area: str, telefono: str | None = 
         try:
             enviar_email(
                 email_infra,
-                "ALERTA: Fallo en servicios de Google en SysBot",
+                "ALERTA: Fallo en servicios de Google en DemoAgent",
                 f"El bot de WhatsApp detectó un fallo en las APIs de Google.\n\n"
                 f"Detalle del error:\n{e}\n\n"
                 f"Área afectada: {area}\n"
@@ -455,7 +461,7 @@ def _alertar_infra_fallo_google(e: Exception, area: str, telefono: str | None = 
         try:
             _enviar_whatsapp_directo(
                 whatsapp_lider_infra,
-                f"ALERTA SysBot: fallo en servicios de Google.\n"
+                f"ALERTA DemoAgent: fallo en servicios de Google.\n"
                 f"Área: {area}\nContacto: {nombre} ({telefono})\nError: {e}",
             )
         except Exception as wa_err:
@@ -578,9 +584,9 @@ def agendar_cita(nombre: str, telefono: str, motivo: str, fecha: str, hora: str,
                         for correo_dest in correos_cliente:
                             enviar_email(
                                 correo_dest,
-                                f"Confirmación de cita SysPlus - {fecha} {hora}",
+                                f"Confirmación de cita DemoCorp - {fecha} {hora}",
                                 f"Hola {nombre},\n\nTu cita quedó registrada:\nMotivo: {motivo}\n"
-                                f"Fecha: {fecha}\nHora: {hora}\nTe atenderá: {persona.nombre} ({area}).\n\nSaludos, SysPlus.",
+                                f"Fecha: {fecha}\nHora: {hora}\nTe atenderá: {persona.nombre} ({area}).\n\nSaludos, DemoCorp.",
                             )
                         cita["email_enviado"] = True
                     except Exception as e:
@@ -666,7 +672,7 @@ def crear_ticket_soporte(telefono: str, descripcion: str, modulo: str) -> dict:
         crm_case_id = None
         crm_case_number = None
         try:
-            caso_crm = espocrm.crear_caso(telefono, f"[{caso_id}] {descripcion}", modulo)
+            caso_crm = espocrm.crear_caso(telefono, f"[{caso_id}] {descripcion}", modulo, radicado=caso_id)
             crm_case_id = caso_crm.get("id")
             crm_case_number = caso_crm.get("number")
             radicado.crm_case_id = crm_case_id
@@ -687,6 +693,7 @@ def crear_ticket_soporte(telefono: str, descripcion: str, modulo: str) -> dict:
 
 
 def consultar_ticket_soporte(ticket_id: str) -> dict:
+    """Consulta el estado de un ticket o radicado de soporte mediante su ID (ej: ESC-XXXX)."""
     # Si el ticket_id es puramente numérico (ej: "20" o 20)
     if str(ticket_id).isdigit():
         try:
@@ -806,15 +813,26 @@ def escalar_a_humano(telefono: str, nombre: str, resumen_caso: str, area: str) -
                 conv.radicado_id = radicado.id
             caso_id = radicado.codigo
 
-        try:
-            crm_case = espocrm.crear_caso(telefono, f"[{caso_id}] {resumen_caso}", area)
-            radicado.crm_case_id = crm_case.get("id")
-        except httpx.HTTPError:
-            logger.exception("espocrm.crear_caso falló para caso_id=%s", caso_id)
+        crm_case_id = radicado.crm_case_id
+        crm_case_number = None
+        if not crm_case_id:
+            try:
+                crm_case = espocrm.crear_caso(telefono, f"[{caso_id}] {resumen_caso}", area, radicado=caso_id)
+                crm_case_id = crm_case.get("id")
+                crm_case_number = crm_case.get("number")
+                radicado.crm_case_id = crm_case_id
+            except httpx.HTTPError:
+                logger.exception("espocrm.crear_caso falló para caso_id=%s", caso_id)
+        else:
+            try:
+                crm_case = espocrm.consultar_caso(crm_case_id)
+                crm_case_number = crm_case.get("number")
+            except httpx.HTTPError:
+                logger.exception("espocrm.consultar_caso falló para crm_case_id=%s", crm_case_id)
 
         cuerpo = f"Cliente: {nombre}\nTeléfono: {telefono}\nResumen: {resumen_caso}"
         try:
-            enviar_email(EMAIL_SOPOPRTE if False else EMAIL_SOPORTE, f"[{caso_id}] Escalamiento SysBot - {nombre}", cuerpo)
+            enviar_email(EMAIL_SOPOPRTE if False else EMAIL_SOPORTE, f"[{caso_id}] Escalamiento DemoAgent - {nombre}", cuerpo)
             radicado.email_enviado = True
         except Exception as e:
             logger.exception("enviar_email falló en escalar_a_humano para caso_id=%s: %s", caso_id, e)
@@ -825,9 +843,13 @@ def escalar_a_humano(telefono: str, nombre: str, resumen_caso: str, area: str) -
         if not agentes:
             session.commit()
             return {
-                "caso_id": caso_id, "estado": "escalado", "modo": None, "atendido_por": None,
+                "caso_id": caso_id,
+                "crm_case_number": crm_case_number,
+                "estado": "escalado",
+                "modo": None,
+                "atendido_por": None,
                 "email_enviado": radicado.email_enviado,
-                "mensaje": f"Caso {caso_id} registrado, pero no hay agentes configurados para el área '{area}'.",
+                "mensaje": f"Caso {caso_id} (Caso CRM {crm_case_number or 'Pendiente'}) registrado, pero no hay agentes configurados para el área '{area}'.",
             }
 
         ocupados = _ocupados()
@@ -841,7 +863,7 @@ def escalar_a_humano(telefono: str, nombre: str, resumen_caso: str, area: str) -
                 contacto.atendido_por = agente.id
                 contacto.conectado_en = datetime.now(timezone.utc)
                 mensaje = (
-                    f"Caso {caso_id} registrado. Un asesor humano de SysPlus dará "
+                    f"Caso {caso_id} (Caso CRM {crm_case_number or 'Pendiente'}) registrado. Un asesor humano de DemoCorp dará "
                     f"seguimiento a {nombre} ({telefono}). Resumen: {resumen_caso}"
                 )
             elif agente.telefono:
@@ -855,7 +877,7 @@ def escalar_a_humano(telefono: str, nombre: str, resumen_caso: str, area: str) -
                 )
                 link_agente = f"https://wa.me/{agente.telefono.lstrip('+')}"
                 mensaje = (
-                    f"Caso {caso_id} registrado y enviado a {agente.nombre}, quien dará "
+                    f"Caso {caso_id} (Caso CRM {crm_case_number or 'Pendiente'}) registrado y enviado a {agente.nombre}, quien dará "
                     f"seguimiento a tu caso. Resumen enviado: {resumen_caso}\n"
                     f"También puedes escribirle directamente aquí: {link_agente}"
                 )
@@ -864,13 +886,17 @@ def escalar_a_humano(telefono: str, nombre: str, resumen_caso: str, area: str) -
                 # ni link que dar; el caso ya quedó por correo a EMAIL_SOPORTE.
                 modo = "notificacion"
                 mensaje = (
-                    f"Caso {caso_id} registrado. Un asesor de SysPlus se comunicará contigo "
+                    f"Caso {caso_id} (Caso CRM {crm_case_number or 'Pendiente'}) registrado. Un asesor de DemoCorp se comunicará contigo "
                     f"a la brevedad posible. Resumen: {resumen_caso}"
                 )
             radicado.modo = modo
             session.commit()
             return {
-                "caso_id": caso_id, "estado": "escalado", "modo": modo, "atendido_por": agente.nombre,
+                "caso_id": caso_id,
+                "crm_case_number": crm_case_number,
+                "estado": "escalado",
+                "modo": modo,
+                "atendido_por": agente.nombre,
                 "email_enviado": radicado.email_enviado,
                 "mensaje": mensaje,
             }
@@ -908,10 +934,13 @@ def escalar_a_humano(telefono: str, nombre: str, resumen_caso: str, area: str) -
             logger.info("No hay whatsapp_lider_%s configurado; se omite alerta de cola.", _norm(area))
 
         return {
-            "caso_id": caso_id, "estado": "en_cola", "posicion": delante + 1,
+            "caso_id": caso_id,
+            "crm_case_number": crm_case_number,
+            "estado": "en_cola",
+            "posicion": delante + 1,
             "email_enviado": radicado.email_enviado,
             "mensaje": (
-                f"Caso {caso_id} registrado. Todos los agentes de '{area}' están ocupados ahora mismo. "
+                f"Caso {caso_id} (Caso CRM {crm_case_number or 'Pendiente'}) registrado. Todos los agentes de '{area}' están ocupados ahora mismo. "
                 f"Hay {delante} persona(s) delante de ti, en breve te atenderán."
             ),
         }
