@@ -15,7 +15,7 @@ def demo():
     assert releido and releido["id"] == lead["id"], "consultar_lead no encontró el lead recién creado"
     print(f"Lead OK: {lead['id']}")
 
-    caso = espocrm.crear_caso(telefono, "Caso de prueba de verificación", "Facturación")
+    caso = espocrm.crear_caso(telefono, "Caso de prueba de verificación", "Facturación", radicado="ESC-VERIFY")
     assert caso.get("id"), f"crear_caso no devolvió id: {caso}"
     releido_caso = espocrm.consultar_caso(caso["id"])
     assert releido_caso.get("id") == caso["id"], "consultar_caso no encontró el caso recién creado"

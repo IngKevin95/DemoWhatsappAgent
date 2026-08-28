@@ -2,14 +2,14 @@ services:
   firebird:
     image: jacobalberty/firebird:3.0
     environment:
-      ISC_PASSWORD: sysbot
+      ISC_PASSWORD: demobot
       FIREBIRD_DATABASE: licencias.fdb
     volumes:
       - firebird_data:/firebird/data
     ports:
       - "3050:3050"
     networks:
-      - sysplus-demo
+      - democorp-demo
     healthcheck:
       test: ["CMD-SHELL", "test -f /firebird/data/licencias.fdb"]
       interval: 5s
@@ -23,11 +23,11 @@ services:
         condition: service_healthy
     environment:
       FIREBIRD_HOST: firebird
-      ISC_PASSWORD: sysbot
+      ISC_PASSWORD: demobot
     command: ["python", "scripts/seed_firebird.py"]
     restart: "no"
     networks:
-      - sysplus-demo
+      - democorp-demo
 
   postgres-demo:
     image: postgres:16
@@ -38,7 +38,7 @@ services:
     volumes:
       - postgres_demo_data:/var/lib/postgresql/data
     networks:
-      - sysplus-demo
+      - democorp-demo
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U espocrm -d espocrm"]
       interval: 5s
@@ -57,15 +57,15 @@ services:
       ESPOCRM_DATABASE_USER: espocrm
       ESPOCRM_DATABASE_PASSWORD: espocrm
       ESPOCRM_ADMIN_USERNAME: admin
-      ESPOCRM_ADMIN_PASSWORD: sysbot123
+      ESPOCRM_ADMIN_PASSWORD: demobot123
       ESPOCRM_SITE_URL: http://localhost:8081
     ports:
       - "8081:80"
     networks:
-      - sysplus-demo
+      - democorp-demo
 
 networks:
-  sysplus-demo:
+  democorp-demo:
     external: true
 
 volumes:

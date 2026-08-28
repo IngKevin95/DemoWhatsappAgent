@@ -1,4 +1,4 @@
-"""Runner de casos de prueba conversacionales end-to-end contra SysBot,
+"""Runner de casos de prueba conversacionales end-to-end contra DemoAgent,
 sin pasar por WhatsApp (llama directo a agent.brain.generar_respuesta).
 
 Uso:

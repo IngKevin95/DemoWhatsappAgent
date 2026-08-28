@@ -28,7 +28,8 @@ class TestEspoCRMRetryBackoff:
         result = crear_caso(
             telefono="573001234567",
             descripcion="Mi problema",
-            modulo="Soporte técnico"
+            modulo="Soporte técnico",
+            radicado="ESC-123"
         )
 
         # Verify retry backoff timing
@@ -49,7 +50,8 @@ class TestEspoCRMRetryBackoff:
         result = crear_caso(
             telefono="573001234567",
             descripcion="Problema",
-            modulo="Support"
+            modulo="Support",
+            radicado="ESC-456"
         )
 
         # Verify sleep was called with backoff times
@@ -71,7 +73,8 @@ class TestEspoCRMRetryBackoff:
             crear_caso(
                 telefono="573001234567",
                 descripcion="Problem",
-                modulo="Support"
+                modulo="Support",
+                radicado="ESC-789"
             )
 
         assert mock_post.call_count == 3, f"Expected 3 attempts, got {mock_post.call_count}"
@@ -96,7 +99,8 @@ class TestEspoCRMRetryBackoff:
         result = crear_caso(
             telefono="573001234567",
             descripcion="Problem",
-            modulo="Support"
+            modulo="Support",
+            radicado="ESC-101"
         )
 
         # Verify it succeeded (meaning retry worked)
@@ -114,13 +118,41 @@ class TestEspoCRMRetryBackoff:
             result = crear_caso(
                 telefono="573001234567",
                 descripcion="Problem",
-                modulo="Support"
+                modulo="Support",
+                radicado="ESC-202"
             )
 
             # Verify logger was called for retry (not hardcoded loop)
             # At least one warning/info about retry
             assert mock_logger.warning.called or mock_logger.info.called, \
                 "Logger should log retry attempts"
+
+    @patch('agent.integrations.espocrm.httpx.post')
+    def test_crear_caso_includes_radicado_in_name(self, mock_post):
+        """Verify that when radicado is provided, it is prepended to the Case name."""
+        mock_post.return_value = MagicMock(status_code=201, json=lambda: {"id": "caso_123"})
+
+        crear_caso(
+            telefono="573001234567",
+            descripcion="Mi problema",
+            modulo="Soporte técnico",
+            radicado="ESC-12345"
+        )
+
+        assert mock_post.call_count == 1
+        args, kwargs = mock_post.call_args
+        body = kwargs.get("json") or args[0]
+        assert body["name"] == "[ESC-12345] Soporte Soporte técnico - 573001234567"
+
+    def test_crear_caso_raises_value_error_if_radicado_empty(self):
+        """Verify that Value error is raised when radicado is empty or None."""
+        with pytest.raises(ValueError, match="Código de radicado es requerido"):
+            crear_caso(
+                telefono="573001234567",
+                descripcion="Mi problema",
+                modulo="Soporte técnico",
+                radicado=""
+            )
 
 
 class TestRetryConsistency:

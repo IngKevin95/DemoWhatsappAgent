@@ -53,7 +53,7 @@ end
 
 subgraph Sistemas
 CRM
-SYS[SysPlus Administrativo]
+SYS[DemoCorp Administrativo]
 HELP[Help Desk]
 ERP
 SMTP
@@ -112,7 +112,7 @@ CRM
 |------|----------|
 | REST | CRM |
 | SOAP | ERP legado |
-| Base de Datos | SysPlus Administrativo |
+| Base de Datos | DemoCorp Administrativo |
 | Webhooks | Meta |
 | Archivos | PDF, Excel, CSV |
 
@@ -123,7 +123,7 @@ CRM
 Cada sistema implementará un adaptador independiente.
 
 - CRMAdapter
-- SysPlusAdapter
+- DemoCorpAdapter
 - HelpDeskAdapter
 - ERPAdapter
 - MetaAdapter
@@ -177,11 +177,11 @@ Operaciones principales:
 
 ---
 
-# 10. Integración con SysPlus
+# 10. Integración con DemoCorp
 
 ## Primera fase
 
-No se utilizará la API de SysPlus.
+No se utilizará la API de DemoCorp.
 
 Las integraciones serán con:
 
@@ -192,7 +192,7 @@ Las integraciones serán con:
 
 ## Segunda fase
 
-Integración mediante la API oficial de SysPlus.
+Integración mediante la API oficial de DemoCorp.
 
 ---
 

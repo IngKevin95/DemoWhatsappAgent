@@ -1,4 +1,4 @@
-"""Generador de PDFs sintéticos para los módulos del ERP SysPlus.
+"""Generador de PDFs sintéticos para los módulos del ERP DemoCorp.
 Crea 13 documentos PDF profesionales usando ReportLab en la carpeta static/pdfs/.
 """
 
@@ -269,7 +269,7 @@ def generar_pdf(name, data):
     story = []
     
     # 1. Encabezado corporativo (Barra de color)
-    header_data = [[Paragraph("<b>SysPlus ERP</b> | Soluciones de Software Empresarial", ParagraphStyle('HText', fontName='Helvetica-Bold', fontSize=10, textColor=colors.white))]]
+    header_data = [[Paragraph("<b>DemoCorp ERP</b> | Soluciones de Software Empresarial", ParagraphStyle('HText', fontName='Helvetica-Bold', fontSize=10, textColor=colors.white))]]
     header_table = Table(header_data, colWidths=[540])
     header_table.setStyle(TableStyle([
         ('BACKGROUND', (0,0), (-1,-1), primary_color),
@@ -282,7 +282,7 @@ def generar_pdf(name, data):
     
     # 2. Título y Subtítulo
     story.append(Paragraph(data["titulo"], styles['DocTitle']))
-    story.append(Paragraph("Ficha Técnica de Módulo Oficial de SysPlus ERP", styles['DocSubtitle']))
+    story.append(Paragraph("Ficha Técnica de Módulo Oficial de DemoCorp ERP", styles['DocSubtitle']))
     
     # 3. Descripción General
     story.append(Paragraph("<b>Descripción General:</b>", styles['SectionHeader']))
@@ -330,8 +330,8 @@ def generar_pdf(name, data):
     story.append(Spacer(1, 10))
     
     # 7. Pie de página de contacto
-    story.append(Paragraph("<b>Contacto Comercial:</b> comercial@sysplus.com | <b>Soporte Técnico:</b> soporte@sysplus.com", styles['FooterText']))
-    story.append(Paragraph("SysPlus ERP &copy; 2026 - Todos los derechos reservados. Colombia.", styles['FooterText']))
+    story.append(Paragraph("<b>Contacto Comercial:</b> comercial@democorp.com | <b>Soporte Técnico:</b> soporte@democorp.com", styles['FooterText']))
+    story.append(Paragraph("DemoCorp ERP &copy; 2026 - Todos los derechos reservados. Colombia.", styles['FooterText']))
     
     # Construir PDF
     doc.build(story)

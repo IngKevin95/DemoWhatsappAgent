@@ -11,8 +11,8 @@ from agent.db import Agente, Area, Base, Modulo, Parametro, SyncSession, sync_en
 # telefono == parametro whatsapp_numero_bot, el escalamiento es opción B (mismo
 # hilo); si no, opción A (notificación a otro WhatsApp).
 AGENTES = [
-    {"area": "comercial", "nombre": "Comercial 1", "email": "comercial1@sysplus.com", "telefono": None, "hora_inicio": "09:00", "hora_fin": "18:00"},
-    {"area": "soporte", "nombre": "Soporte 1", "email": "soporte1@sysplus.com", "telefono": None, "hora_inicio": "08:00", "hora_fin": "17:00"},
+    {"area": "comercial", "nombre": "Comercial 1", "email": "comercial1@democorp.com", "telefono": None, "hora_inicio": "09:00", "hora_fin": "18:00"},
+    {"area": "soporte", "nombre": "Soporte 1", "email": "soporte1@democorp.com", "telefono": None, "hora_inicio": "08:00", "hora_fin": "17:00"},
 ]
 
 PRECIOS_MODULOS = {
@@ -24,12 +24,12 @@ PRECIOS_MODULOS = {
 
 PARAMETROS = {
     "horario_atencion": ("Lunes a viernes, 8:00 am - 6:00 pm", "Horario de atención comercial y soporte"),
-    "email_soporte": (os.getenv("EMAIL_SOPORTE", "soporte@sysplus.com"), "Correo de escalamiento a soporte humano"),
+    "email_soporte": (os.getenv("EMAIL_SOPORTE", "soporte@democorp.com"), "Correo de escalamiento a soporte humano"),
     "whatsapp_numero_bot": (os.getenv("META_PHONE_NUMBER_ID", ""), "Número/ID de WhatsApp del bot (para detectar escalamiento opción B)"),
-    "correo_comercial": ("comercial@sysplus.com", "Correo general del área comercial"),
-    "correo_info": ("info@sysplus.com", "Correo general de información"),
-    "correo_soporte": ("soporte@sysplus.com", "Correo general de soporte"),
-    "correo_proveedores": ("proveedores@sysplus.com", "Correo general para proveedores"),
+    "correo_comercial": ("comercial@democorp.com", "Correo general del área comercial"),
+    "correo_info": ("info@democorp.com", "Correo general de información"),
+    "correo_soporte": ("soporte@democorp.com", "Correo general de soporte"),
+    "correo_proveedores": ("proveedores@democorp.com", "Correo general para proveedores"),
     "timeout_pausa_minutos": ("60", "Minutos de inactividad tras los cuales una pausa (opción B) se cierra sola"),
     "whatsapp_lider_infra": ("573192931227", "Número WhatsApp del líder de infraestructura, alertado ante fallos técnicos de Google/Calendar (EP-015)"),
     "whatsapp_lider_comercial": ("573192931227", "Número WhatsApp del líder comercial, notificado cuando un caso del área comercial entra en cola (EP-015)"),
@@ -51,7 +51,7 @@ COMBOS = [
     },
     {
         "nombre": "Combo Full ERP",
-        "descripcion": "Todos los 12 módulos de SysPlus para control total.",
+        "descripcion": "Todos los 12 módulos de DemoCorp para control total.",
         "modulos": "Productos, Inventario, Facturación, Cartera, Compras, Cuentas por pagar, Tesorería, Importaciones, CRM, Producción, Nómina, Contabilidad, POS",
         "precio_anual_cop": 3500000
     }

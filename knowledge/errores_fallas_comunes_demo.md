@@ -1,4 +1,4 @@
-# Base de errores y fallas comunes SysPlus ERP
+# Base de errores y fallas comunes DemoCorp ERP
 
 ## Factura electrónica rechazada por DIAN - Error común
 

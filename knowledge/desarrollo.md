@@ -2,7 +2,7 @@
 
 ## Desarrollo de Software - Construcción y Mejoras del ERP
 
-El área de desarrollo es responsable de construir, mantener, testear y evolucionar el ERP SysPlus y sus complementos.
+El área de desarrollo es responsable de construir, mantener, testear y evolucionar el ERP DemoCorp y sus complementos.
 
 ### Servicios ofrecidos
 - Desarrollo de nuevos módulos y funcionalidades personalizadas.

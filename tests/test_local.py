@@ -1,4 +1,4 @@
-"""Simulador de chat en terminal para probar SysBot sin WhatsApp.
+"""Simulador de chat en terminal para probar DemoAgent sin WhatsApp.
 Ejecutar: python -m tests.test_local"""
 
 import asyncio
@@ -19,7 +19,7 @@ TELEFONO_TEST = "573000000000"
 
 async def main():
     await inicializar_db()
-    print("SysBot (Ctrl+C para salir)\n")
+    print("DemoAgent (Ctrl+C para salir)\n")
     while True:
         try:
             texto = input("Tú: ")
@@ -29,7 +29,7 @@ async def main():
         respuesta = await generar_respuesta(TELEFONO_TEST, texto, historial)
         await guardar_mensaje(TELEFONO_TEST, "user", texto)
         await guardar_mensaje(TELEFONO_TEST, "assistant", respuesta)
-        print(f"SysBot: {respuesta}\n")
+        print(f"DemoAgent: {respuesta}\n")
 
 
 if __name__ == "__main__":

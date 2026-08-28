@@ -1,10 +1,10 @@
-# Guía de presentación — El Agente (SysBot)
+# Guía de presentación — El Agente (DemoAgent)
 
 > Los tableros muestran *qué pasó*. El agente **es lo que pasa**. Esta guía es para presentar el producto real: un empleado digital que atiende, resuelve y escala 24/7.
 
 ## La idea en una frase
 
-> "Es un asesor de SysPlus que vive en WhatsApp: atiende a cualquier hora, responde con información real de la empresa, agenda demos, gestiona licencias y, cuando el caso lo amerita, se lo pasa a una persona sin que el cliente tenga que repetir nada."
+> "Es un asesor de DemoCorp que vive en WhatsApp: atiende a cualquier hora, responde con información real de la empresa, agenda demos, gestiona licencias y, cuando el caso lo amerita, se lo pasa a una persona sin que el cliente tenga que repetir nada."
 
 ## Por qué es el valor real (no el dashboard)
 
@@ -20,7 +20,7 @@ El dashboard es el espejo retrovisor; el agente es el auto. Cuatro cosas que apo
 ## Cómo funciona (para ambos públicos)
 
 **Versión funcional (30 segundos):**
-> "El cliente escribe por WhatsApp. El agente entiende qué necesita, busca la información en los sistemas de SysPlus, responde, y ejecuta acciones concretas: cotizar, agendar una demo, abrir un ticket, verificar una licencia. Si se topa con algo que necesita criterio humano, escala."
+> "El cliente escribe por WhatsApp. El agente entiende qué necesita, busca la información en los sistemas de DemoCorp, responde, y ejecuta acciones concretas: cotizar, agendar una demo, abrir un ticket, verificar una licencia. Si se topa con algo que necesita criterio humano, escala."
 
 **Versión técnica (para el ingeniero):**
 > "El webhook recibe el mensaje (Meta o Telegram). El modelo — Gemini — hace **function-calling**: decide *qué* herramienta invocar, pero **no** inventa el resultado. Cada herramienta es código determinista que consulta PostgreSQL, Firebird, EspoCRM o Google Calendar y devuelve el dato real. El modelo solo orquesta; los datos críticos (precios, licencias, disponibilidad) nunca salen de la IA, salen de la base."

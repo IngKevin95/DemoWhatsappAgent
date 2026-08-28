@@ -2,7 +2,7 @@
 
 ## Consultoría Funcional - Parametrización y Procesos del ERP
 
-La consultoría funcional asesora a los clientes en la correcta utilización, configuración y optimización de los módulos de SysPlus ERP según el modelo de negocio.
+La consultoría funcional asesora a los clientes en la correcta utilización, configuración y optimización de los módulos de DemoCorp ERP según el modelo de negocio.
 
 ### Servicios ofrecidos
 - Parametrización contable y operativa de módulos.

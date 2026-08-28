@@ -116,9 +116,11 @@ def consultar_casos_por_telefono(telefono: str) -> list[dict]:
 
 
 @retry(max_attempts=3, backoff_base=2.0, exceptions=(Exception,))
-def crear_caso(telefono: str, descripcion: str, modulo: str) -> dict:
+def crear_caso(telefono: str, descripcion: str, modulo: str, radicado: str) -> dict:
+    if not radicado:
+        raise ValueError("Código de radicado es requerido")
     body = {
-        "name": f"Soporte {modulo} - {telefono}",
+        "name": f"[{radicado}] Soporte {modulo} - {telefono}",
         "description": descripcion,
         "type": "Problem",
         "status": "New",

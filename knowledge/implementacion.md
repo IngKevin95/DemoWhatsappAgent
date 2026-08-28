@@ -2,7 +2,7 @@
 
 ## Implementación - Metodología de Puesta en Marcha
 
-El área de implementación gestiona la instalación e inicio de operación del ERP SysPlus desde la planeación hasta la salida a producción.
+El área de implementación gestiona la instalación e inicio de operación del ERP DemoCorp desde la planeación hasta la salida a producción.
 
 ### Servicios ofrecidos
 - Planeación de cronograma, parametrización de bases de datos, migración de saldos iniciales (inventario y cartera), capacitación a usuarios y acompañamiento en salida en vivo.

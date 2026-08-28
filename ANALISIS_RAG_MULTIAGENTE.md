@@ -1,4 +1,4 @@
-# Análisis: Estado actual vs. RAG vs. Multi-agente (SysBot)
+# Análisis: Estado actual vs. RAG vs. Multi-agente (DemoAgent)
 
 Fecha: 2026-07-10
 
@@ -77,7 +77,7 @@ Los números de "peticiones/clientes simultáneos" de este documento son **estim
 **Límites:**
 - Complejidad operativa alta: más piezas, más superficie de fallo, más difícil de debuggear (¿cuál agente falló? ¿el protocolo se colgó esperando a uno?).
 - Necesita observabilidad dedicada (trazas por agente) para ser mantenible.
-- No resuelve nada que el modelo actual + RAG no resuelva ya para el alcance de SysBot (WhatsApp de un solo hilo, intención mayormente única por mensaje).
+- No resuelve nada que el modelo actual + RAG no resuelva ya para el alcance de DemoAgent (WhatsApp de un solo hilo, intención mayormente única por mensaje).
 
 **Pros:**
 - Permite paralelismo real entre dominios independientes (ej. consultar Firebird y EspoCRM al mismo tiempo).
@@ -109,11 +109,11 @@ Los números de "peticiones/clientes simultáneos" de este documento son **estim
 | Horas estimadas | 0h | 40-80h (+ troceo por manual) | 120-240h |
 | Costo interno (COP) | $0 | 2M - 4M + troceo por manual | 6M - 12M |
 | Precio de venta (COP) | $0 | 3M - 6M + troceo por manual | 9M - 18M |
-| Justificado para alcance actual de SysBot | Ya cubierto | **Sí, si el objetivo es manuales reales** | No — sobre-ingeniería para este caso |
+| Justificado para alcance actual de DemoAgent | Ya cubierto | **Sí, si el objetivo es manuales reales** | No — sobre-ingeniería para este caso |
 
 ## 5. Recomendación
 
-Para el objetivo declarado (agente que infiere respuestas desde manuales de usuario no estructurados): **implementar RAG con pgvector**, no multi-agente. El multi-agente resuelve un problema de coordinación entre múltiples dominios con lógica condicional compleja que SysBot no tiene hoy — agregarlo ahora es costo y riesgo sin beneficio proporcional. Si en el futuro el bot necesita encadenar rutinariamente varios sistemas con lógica condicional entre pasos, o reusar agentes especializados en otros canales, ahí se reevalúa.
+Para el objetivo declarado (agente que infiere respuestas desde manuales de usuario no estructurados): **implementar RAG con pgvector**, no multi-agente. El multi-agente resuelve un problema de coordinación entre múltiples dominios con lógica condicional compleja que DemoAgent no tiene hoy — agregarlo ahora es costo y riesgo sin beneficio proporcional. Si en el futuro el bot necesita encadenar rutinariamente varios sistemas con lógica condicional entre pasos, o reusar agentes especializados en otros canales, ahí se reevalúa.
 
 ---
 

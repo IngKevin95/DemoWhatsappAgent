@@ -56,7 +56,7 @@ def generar_datos_sinteticos():
         {
             "query": "¿Cuánto cuesta la licencia del módulo de Nómina?",
             "intent": "comercial",
-            "file": "sysplus_modulos.md",
+            "file": "democorp_modulos.md",
             "section": "Nómina",
             "expected_entities": {"modulo": "Nómina"},
             "ground_truth": "Liquidación de nómina electrónica, seguridad social, prestaciones sociales, préstamos y descuentos, certificados laborales."
@@ -64,7 +64,7 @@ def generar_datos_sinteticos():
         {
             "query": "precio modulo contabilidad anual",
             "intent": "comercial",
-            "file": "sysplus_modulos.md",
+            "file": "democorp_modulos.md",
             "section": "Contabilidad",
             "expected_entities": {"modulo": "Contabilidad"},
             "ground_truth": "Plan de cuentas configurable, causación automática desde todos los módulos, estados financieros NIIF, centros de costo, cierre de períodos."
@@ -75,7 +75,7 @@ def generar_datos_sinteticos():
             "file": "comercial.md",
             "section": "Productos relacionados",
             "expected_entities": {"tema": "combos"},
-            "ground_truth": "ERP SysPlus, CRM, Facturación Electrónica, Inventarios, Contabilidad..."
+            "ground_truth": "ERP DemoCorp, CRM, Facturación Electrónica, Inventarios, Contabilidad..."
         },
         {
             "query": "¿Qué módulos incluye el Combo Emprendedor?",
@@ -88,7 +88,7 @@ def generar_datos_sinteticos():
         {
             "query": "Tienen algun paquete economico para punto de venta pos?",
             "intent": "comercial",
-            "file": "sysplus_modulos.md",
+            "file": "democorp_modulos.md",
             "section": "POS",
             "expected_entities": {"modulo": "POS"},
             "ground_truth": "Punto de venta táctil, múltiples medios de pago, turnos de caja, facturación electrónica en línea, integración con inventario en tiempo real."
@@ -144,7 +144,7 @@ def generar_datos_sinteticos():
             "ground_truth": "Causas frecuentes: Documentos sin contabilizar. Periodo contable cerrado parcialmente. Cuentas mal parametrizadas. Terceros o centros de costo incompletos."
         },
         {
-            "query": "El sistema SysPlus esta demasiado lento hoy en todas las pantallas",
+            "query": "El sistema DemoCorp esta demasiado lento hoy en todas las pantallas",
             "intent": "soporte",
             "file": "errores_fallas_comunes_demo.md",
             "section": "Falla común: lentitud general del sistema",
@@ -170,7 +170,7 @@ def generar_datos_sinteticos():
             "ground_truth": "Empresa. Proyecto. Responsable. Módulos."
         },
         {
-            "query": "¿Cómo puedo renovar mi licencia anual de SysPlus?",
+            "query": "¿Cómo puedo renovar mi licencia anual de DemoCorp?",
             "intent": "comercial",
             "file": "licenciamiento.md",
             "section": "Preguntas frecuentes",
@@ -188,7 +188,7 @@ def generar_datos_sinteticos():
         {
             "query": "¿Tienen soporte técnico incluido con la licencia o toca pagarlo aparte?",
             "intent": "comercial",
-            "file": "sysplus_modulos.md",
+            "file": "democorp_modulos.md",
             "section": "Precios y Soporte",
             "expected_entities": {"tema": "soporte incluido"},
             "ground_truth": "Todos los valores comerciales y precios de los módulos individuales y combos son anuales e incluyen soporte técnico por un año."
@@ -254,7 +254,7 @@ def main():
     report.append("\n## 2. Recomendaciones de Depuración")
     report.append("1. **Namespacing de Encabezados:** Renombrar los H2 redundantes como `## Objetivo de Capacitación` en vez de `## Objetivo`, o usar prefijos de contexto `## Capacitación - Objetivo`.")
     report.append("2. **Migración a pgvector (RAG semántico):** La coincidencia por cadenas exactas es extremadamente frágil. Migrar a RAG pgvector (como se describe en [ANALISIS_RAG_MULTIAGENTE.md](file:///E:/Datos/Documentos/GitHub%20Personal/DemoWhatsappAgent/ANALISIS_RAG_MULTIAGENTE.md)) resolverá esto permanentemente.")
-    report.append("3. **Resolución de homónimos comerciales vs internos:** Clarificar en `facturacion.md` y `cobranza.md` que corresponden al cobro interno del cliente de SysPlus, mientras que `sysplus_modulos.md` describe los módulos del software ERP.")
+    report.append("3. **Resolución de homónimos comerciales vs internos:** Clarificar en `facturacion.md` y `cobranza.md` que corresponden al cobro interno del cliente de DemoCorp, mientras que `democorp_modulos.md` describe los módulos del software ERP.")
     
     report.append("\n## 3. Generación de Datos Sintéticos")
     report.append("Se generó un dataset de 20 casos de prueba/QA sintéticos en `knowledge/synthetic_data.json`. Contiene preguntas realistas en lenguaje coloquial, mapeadas a su respectiva intención (`comercial`, `soporte`, `otro`), archivo de origen y respuesta exacta (ground truth).")

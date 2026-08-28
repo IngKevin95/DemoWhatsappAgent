@@ -25,7 +25,7 @@ Los tickets en el CRM pasan por: Abierto → En análisis → Escalado → En de
 
 ### Preguntas frecuentes
 - **¿Cómo consulto el estado de mi radicado?** Puede consultar con el bot ingresando el número de caso `ESC-<id>`.
-- **¿Cómo reporto un error técnico?** Enviando correo a soporte@sysplus.com o creando el caso mediante este bot.
+- **¿Cómo reporto un error técnico?** Enviando correo a soporte@democorp.com o creando el caso mediante este bot.
 - **¿Cuál es el tiempo de respuesta?** Varía según la gravedad: crítico (hasta 4 horas), normal (hasta 24 horas).
 
 ### Recomendaciones

@@ -1,4 +1,4 @@
-# Base de conocimiento SysPlus ERP
+# Base de conocimiento DemoCorp ERP
 
 ## Productos - Módulo ERP
 Gestión de catálogo: fichas técnicas, variantes (talla/color), listas de precios múltiples, códigos de barras, unidades de medida alternativas, kits/combos.

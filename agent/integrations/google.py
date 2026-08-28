@@ -42,7 +42,7 @@ def crear_evento_calendar(
         inicio_dt = datetime.strptime(f"{fecha} {hora}", "%Y-%m-%d %H:%M")
         fin_dt = inicio_dt + timedelta(hours=1)
         evento = {
-            "summary": f"Cita SysPlus - {nombre}",
+            "summary": f"Cita DemoCorp - {nombre}",
             "description": f"Motivo: {motivo}\nTeléfono: {telefono}",
             "start": {"dateTime": inicio_dt.isoformat(), "timeZone": "America/Bogota"},
             "end": {"dateTime": fin_dt.isoformat(), "timeZone": "America/Bogota"},

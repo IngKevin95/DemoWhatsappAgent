@@ -1,7 +1,7 @@
 # Guía de Dashboards Grafana — DemoWhatsappAgent
 
 Explicación panel por panel. Dos fuentes de datos:
-- **PostgreSQL** (`sysbot`): datos de negocio, se llenan con el seed y el uso real.
+- **PostgreSQL** (`demobot`): datos de negocio, se llenan con el seed y el uso real.
 - **Prometheus**: métricas técnicas en vivo; requieren que el bot esté corriendo y scrapeando.
 
 Rango temporal por defecto: negocio `now-6M`, técnicos `now-6h` (ajustable arriba a la derecha).

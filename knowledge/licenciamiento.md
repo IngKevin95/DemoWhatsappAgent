@@ -2,7 +2,7 @@
 
 ## Licenciamiento - Control de Licencias y Usuarios
 
-El área de licenciamiento administra los permisos de uso, activaciones de llaves y ampliaciones del software SysPlus ERP.
+El área de licenciamiento administra los permisos de uso, activaciones de llaves y ampliaciones del software DemoCorp ERP.
 
 ### Servicios del Área
 - Venta de licencias anuales de software.

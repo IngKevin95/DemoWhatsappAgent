@@ -6,7 +6,7 @@ import firebird.driver as fb
 HOST = os.getenv("FIREBIRD_HOST", "localhost")
 DSN = f"{HOST}/3050:licencias.fdb"
 USER = "sysdba"
-PASSWORD = os.getenv("ISC_PASSWORD", "sysbot")
+PASSWORD = os.getenv("ISC_PASSWORD", "demobot")
 
 # Identificaciones fijas y documentadas para la demo:
 # 900111222 = con licencia y contrato de soporte activo

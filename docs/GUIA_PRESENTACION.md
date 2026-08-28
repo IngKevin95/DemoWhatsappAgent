@@ -22,7 +22,7 @@ Tenés dos públicos en la sala:
 
 ### Diálogo de apertura
 
-> "Este es el bot de WhatsApp de SysPlus operando. Atiende consultas comerciales, soporte y licencias, y cuando hace falta escala a una persona. Lo que van a ver son **6 meses de operación** medidos en tiempo real: 2.568 personas atendidas, más de 10.000 mensajes, y todo el equipo de soporte trabajando sobre los mismos datos. No son mockups: cada número sale de la base de datos de producción."
+> "Este es el bot de WhatsApp de DemoCorp operando. Atiende consultas comerciales, soporte y licencias, y cuando hace falta escala a una persona. Lo que van a ver son **6 meses de operación** medidos en tiempo real: 2.568 personas atendidas, más de 10.000 mensajes, y todo el equipo de soporte trabajando sobre los mismos datos. No son mockups: cada número sale de la base de datos de producción."
 
 ---
 
@@ -118,7 +118,7 @@ Tenés dos públicos en la sala:
 ### Del ingeniero de sistemas (técnicas)
 
 **"¿De dónde salen estos datos?"**
-> Los de negocio, de PostgreSQL (esquema `sysbot`) vía SQL directo en cada panel. Los técnicos, de Prometheus que scrapea el endpoint `/metrics` del bot. Grafana solo lee; no hay capa intermedia que transforme.
+> Los de negocio, de PostgreSQL (esquema `demobot`) vía SQL directo en cada panel. Los técnicos, de Prometheus que scrapea el endpoint `/metrics` del bot. Grafana solo lee; no hay capa intermedia que transforme.
 
 **"¿Por qué el monitoreo no muestra 6 meses como el negocio?"**
 > Porque Prometheus solo almacena lo que scrapea en tiempo real; no acepta datos con fecha pasada. El negocio sí lo sembramos hacia atrás en SQL. La retención de Prometheus está en 1 año, así el histórico real se acumula operando. Es una diferencia de naturaleza entre una base transaccional y una serie temporal.

@@ -156,6 +156,7 @@ class TestEscalarAHumano:
              patch("agent.tools._get_area", return_value=area_row), \
              patch("agent.tools._agentes_por_area", return_value=[]), \
              patch("agent.tools.espocrm.crear_caso", return_value={"id": "CRM-001"}), \
+             patch("agent.tools.espocrm.consultar_caso", return_value={"id": "CRM-001", "number": 123}), \
              patch("agent.tools.enviar_email", return_value=None), \
              patch("agent.tools.Radicado", return_value=radicado_mock):
             resultado = escalar_a_humano(

@@ -11,7 +11,7 @@
 
 # 1. Introducción
 
-Este documento describe la arquitectura propuesta para una plataforma de atención omnicanal basada en Inteligencia Artificial, diseñada inicialmente para una empresa desarrolladora de software ERP (SysPlus), pero concebida desde su origen como una plataforma reutilizable para múltiples clientes y múltiples dominios de negocio.
+Este documento describe la arquitectura propuesta para una plataforma de atención omnicanal basada en Inteligencia Artificial, diseñada inicialmente para una empresa desarrolladora de software ERP (DemoCorp), pero concebida desde su origen como una plataforma reutilizable para múltiples clientes y múltiples dominios de negocio.
 
 El objetivo no es construir un chatbot.
 
